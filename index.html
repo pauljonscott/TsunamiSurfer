@@ -159,15 +159,15 @@
   <div id="hint"></div>
   <button class="ghost" id="cam-hud">Camera: auto</button>
 </div>
-<button class="steer" id="btn-l" aria-label="Carve down the face">◀<small>drop</small></button>
-<button class="steer" id="btn-r" aria-label="Carve up the wave">▶<small>climb</small></button>
+<button class="steer" id="btn-l" aria-label="Carve down the face">◀<small id="btn-l-t">drop</small></button>
+<button class="steer" id="btn-r" aria-label="Carve up the wave">▶<small id="btn-r-t">climb</small></button>
 <button class="steer small" id="btn-stall" aria-label="Stall to slow down">▼<small>stall</small></button>
 <button class="steer small" id="btn-pump" aria-label="Pump to speed up">▲<small>pump</small></button>
 
 <div class="overlay on" id="title">
   <div class="panel">
     <h1>Tsunami Surf</h1>
-    <p>A wall of water taller than a skyscraper is peeling down the line. Carve your line, pump for speed or stall to let the lip catch you, and don’t get caught when it closes out.</p>
+    <p>A wall of water half a kilometre high is peeling down the line. Carve your line, pump for speed, cut back toward the curl and come round again, and don’t get caught when it closes out.</p>
     <p class="dim" id="ctrl-desc"></p>
     <div class="row">
       <button class="primary" id="start">Paddle in</button>
@@ -321,7 +321,7 @@ vec2 profile(float s, float z, float t, WP p, out vec4 aux) {
       lx = J.x + 0.5 * th * tg.y; ly = J.y - 0.5 * th * tg.x;
       larc = Lface + tau * p.vj * H;
       lthin = 0.6 + 0.4 * u; lao = 1.0 - 0.65 * p.lam;
-      lfoam = p.lam * sstep(0.85, 1.0, u) * 0.35;
+      lfoam = p.lam * sstep(0.85, 1.0, u) * 0.12;
     } else if (s < 0.62) {
       float a = (s - 0.58) / 0.04 * PI; float tau = tauTip;
       vec2 J = jetPos(tau, C0, cj, sj, p.vj, H); vec2 tg = jetTan(tau, cj, sj, p.vj);
@@ -330,7 +330,7 @@ vec2 profile(float s, float z, float t, WP p, out vec4 aux) {
       lx = J.x + r * (ca * tg.y + sa * tg.x); ly = J.y + r * (-ca * tg.x + sa * tg.y);
       larc = Lface + tau * p.vj * H + r * a;
       lthin = 1.0; lao = 1.0 - 0.65 * p.lam * (1.0 - a / PI);
-      lfoam = p.lam * (0.25 + 0.45 * sa) + 0.9 * feather;
+      lfoam = p.lam * (0.1 + 0.3 * sa) + 0.3 * feather;
     } else {
       float u = 1.0 - (s - 0.62) / 0.12; float tau = u * tauTip;
       vec2 J = jetPos(tau, C0, cj, sj, p.vj, H); vec2 tg = jetTan(tau, cj, sj, p.vj);
@@ -338,14 +338,14 @@ vec2 profile(float s, float z, float t, WP p, out vec4 aux) {
       lx = J.x - 0.5 * th * tg.y; ly = J.y + 0.5 * th * tg.x;
       larc = Lface + tau * p.vj * H;
       lthin = 0.9; lao = 1.0;
-      lfoam = p.lam * sstep(0.85, 1.0, u) * 0.3 + 0.4 * feather * (1.0 - u);
+      lfoam = p.lam * sstep(0.85, 1.0, u) * 0.15 + 0.15 * feather * (1.0 - u);
     }
     float u2 = (s - 0.46) / 0.28; float mag = 0.7 * p.d0;
     float a1 = 230.0 * DEG;
     vec2 cap = hermite(T, mag * vec2(cos(p.gT), sin(p.gT)), top, mag * vec2(cos(a1), sin(a1)), u2);
     float w = p.w;
     x = mix(cap.x, lx, w); y = mix(cap.y, ly, w);
-    foam = mix(0.9 * feather * sstep(0.2, 0.5, u2) * (1.0 - sstep(0.5, 0.8, u2)), lfoam, w);
+    foam = mix(0.3 * feather * sstep(0.2, 0.5, u2) * (1.0 - sstep(0.5, 0.8, u2)), lfoam, w);
     thin = mix(0.35, lthin, w); ao = mix(1.0, lao, w);
     arc = mix(Lface + u2 * 2.0 * p.d0, larc, w);
   } else if (s < 0.86) {
@@ -472,7 +472,7 @@ void main() {
   float mx = fbm(q2 + vec2(0.05, 0.0));
   float my = fbm(q2 + vec2(0.0, 0.05));
   vec2 g2 = vec2(mx - m0, my - m0) / 0.05;
-  float bump = 0.06 + 0.06 * (1.0 - vThin);
+  float bump = 0.09 + 0.04 * (1.0 - vThin);
   // fine detail fades with distance so the wide shots of the big face don't shimmer
   float nearK = 1.0 - smoothstep(90.0, 450.0, vFog);
   vec3 Np = normalize(N + (g.x * T + g.y * B) * bump + (g2.x * T + g2.y * B) * 0.03 * nearK);
@@ -490,34 +490,43 @@ void main() {
   float diff = clamp((ndl + 0.55) / 1.55, 0.0, 1.0);
   float hemi = 0.5 + 0.5 * Np.y;
   vec3 ambient = mix(deep * 1.4, uSkyHorizon * 0.55, hemi);
-  vec3 lit = col * (ambient * 0.9 + uSunCol * diff * 0.85);
+  // occlusion: the water under the lip sits in the shadow of the tube
+  float occ = mix(1.0, vAO, 0.85);
+  vec3 lit = col * (ambient * 0.9 + uSunCol * diff * 0.85) * occ;
 
-  // sun shining through the thin lip / upper face
+  // sun shining through the thin lip / upper face: light through the water itself, so the tube's shadow only dims it a little
   float back = clamp(dot(-V, L), 0.0, 1.0);
   float trans = vThin * (0.25 + 0.75 * pow(back, 2.0)) + vThin * 0.35 * clamp(dot(Np, -L), 0.0, 1.0);
-  lit += vec3(0.20, 0.78, 0.66) * trans * 0.9;
+  // the glow is streaked along the flow, so the lip reads as moving water rather than a smooth green shell
+  float sheet = fbm(vec2(uv.x * 0.04, uv.y * 0.5) + vec2(0.0, n0));
+  lit += vec3(0.20, 0.78, 0.66) * trans * 0.9 * mix(1.0, vAO, 0.35) * (0.6 + 0.8 * sheet);
 
-  // specular + Fresnel sky reflection
+  // specular + Fresnel sky reflection (inside the tube it reflects the tube, not the sky)
   vec3 Hh = normalize(L + V);
   float spec = pow(max(dot(Np, Hh), 0.0), 160.0) * 1.3 + pow(max(dot(Np, Hh), 0.0), 24.0) * 0.12;
   float fres = 0.03 + 0.97 * pow(1.0 - max(dot(Np, V), 0.0), 5.0);
   vec3 R = reflect(-V, Np);
   R.y = abs(R.y);
   vec3 sky = skyColor(R);
-  lit = mix(lit, sky, fres * 0.75);
-  lit += uSunCol * spec;
+  lit = mix(lit, sky * occ, fres * 0.75);
+  lit += uSunCol * spec * occ;
 
-  // foam
-  float fn = fbm(uv * 0.7 + vec2(-uTime * 0.6, uTime * 0.2)) * 0.75 + fbm(uv * 2.4) * 0.25;
-  float fAmt = clamp((fn - (1.0 - vFoam * 1.15)) * 4.0, 0.0, 1.0) * clamp(vFoam * 3.0, 0.0, 1.0);
+  // foam, stretched along the flow: thrown water tears into streaks rather than round blobs
+  float fn = fbm(uv * vec2(0.3, 0.9) + vec2(-uTime * 0.3, uTime * 0.2)) * 0.75 + fbm(uv * vec2(1.1, 2.8)) * 0.25;
+  // far away that noise is finer than a pixel: fade it to its average so distant foam reads as a soft veil, not white speckle
+  float farK = smoothstep(120.0, 700.0, vFog);
+  fn = mix(fn, 0.45, farK * 0.85);
+  float fAmt = clamp((fn - (1.0 - vFoam * 1.15)) * mix(4.0, 1.6, farK), 0.0, 1.0) * clamp(vFoam * 3.0, 0.0, 1.0);
   // thin streaks low on the face from old whitewater
   float streak = fbm(vec2(uv.x * 0.08, uv.y * 0.9)) ;
   float streakAmt = smoothstep(0.62, 0.8, streak) * (1.0 - smoothstep(0.1, 0.45, vHf)) * 0.35 * smoothstep(0.0, 0.05, vHf) * nearK;
   fAmt = max(fAmt, streakAmt);
-  vec3 foamCol = vec3(0.96, 0.98, 1.0) * (0.62 + 0.38 * diff) * (0.82 + 0.22 * n0) + uSunCol * spec * 0.3;
+  // where the whitewater is thick even the gaps between the foam patches are aerated
+  fAmt = max(fAmt, 0.45 * smoothstep(0.45, 0.95, vFoam));
+  // foam is bright aerated water: lit by the whole sky, barely shadowed, and glowing where the sun comes through the lip
+  vec3 foamCol = vec3(0.96, 0.98, 1.0) * (0.74 + 0.26 * diff) * (0.86 + 0.18 * n0) * mix(1.0, vAO, 0.3)
+               + vec3(0.55, 0.85, 0.80) * trans * 0.3 + uSunCol * spec * 0.3;
   lit = mix(lit, foamCol, fAmt);
-
-  lit *= mix(1.0, vAO, 0.85);
 
   float fog = smoothstep(uFogNear, uFogFar, vFog);
   lit = mix(lit, uFogCol, fog);
@@ -655,7 +664,7 @@ void main() {
 // along +z at the peel speed; behind it the wave has already broken.
 //
 // The wave is built at scale S: every length is S times the original 24-44 m
-// wave and every speed and time sqrt(S) times (Froude scaling, so gravity and
+// wave (so a 290-530 m face at S = 12) and every speed and time sqrt(S) times (Froude scaling, so gravity and
 // the shape of the break stay physically consistent).
 //
 // Cross-section parameter s in [0,1]:
@@ -676,7 +685,7 @@ void main() {
   const mix = (a, b, t) => a + (b - a) * t;
   function sstep(e0, e1, x) { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
 
-  const S = 6;              // wave scale: six times the original wave
+  const S = 12;             // wave scale: twelve times the original wave
   const SV = Math.sqrt(S);  // speed / time scale
 
   // Global wave state (uniforms in the shader).
@@ -791,7 +800,7 @@ void main() {
         lx = _tmp.x + 0.5 * th * tg[1]; ly = _tmp.y - 0.5 * th * tg[0];
         larc = Lface + tau * p.vj * H;
         lthin = 0.6 + 0.4 * u; lao = 1 - 0.65 * p.lam;
-        lfoam = p.lam * sstep(0.85, 1.0, u) * 0.35;
+        lfoam = p.lam * sstep(0.85, 1.0, u) * 0.12;
       } else if (s < 0.62) {                      // D: around the tip
         const a = (s - 0.58) / 0.04 * Math.PI, tau = tauTip;
         jet(tau); const tg = tang(tau), r = 0.5 * thick(tau);
@@ -799,14 +808,14 @@ void main() {
         lx = _tmp.x + r * (ca * tg[1] + sa * tg[0]); ly = _tmp.y + r * (-ca * tg[0] + sa * tg[1]);
         larc = Lface + tau * p.vj * H + r * a;
         lthin = 1; lao = 1 - 0.65 * p.lam * (1 - a / Math.PI);
-        lfoam = p.lam * (0.25 + 0.45 * sa) + 0.9 * sstep(-1.2, -0.1, p.phi) * (1 - sstep(0.5, 1.5, p.phi));
+        lfoam = p.lam * (0.1 + 0.3 * sa) + 0.3 * sstep(-1.2, -0.1, p.phi) * (1 - sstep(0.5, 1.5, p.phi));
       } else {                                    // E: top, tip -> root
         const u = 1 - (s - 0.62) / 0.12, tau = u * tauTip;
         jet(tau); const tg = tang(tau), th = thick(tau);
         lx = _tmp.x - 0.5 * th * tg[1]; ly = _tmp.y + 0.5 * th * tg[0];
         larc = Lface + tau * p.vj * H;
         lthin = 0.9; lao = 1;
-        lfoam = p.lam * sstep(0.85, 1.0, u) * 0.3 + 0.4 * sstep(-1.2, -0.1, p.phi) * (1 - sstep(0.5, 1.5, p.phi)) * (1 - u);
+        lfoam = p.lam * sstep(0.85, 1.0, u) * 0.15 + 0.15 * sstep(-1.2, -0.1, p.phi) * (1 - sstep(0.5, 1.5, p.phi)) * (1 - u);
       }
       // rounded crest cap (unbroken) from T to the body top
       const u2 = (s - 0.46) / 0.28, mag = 0.7 * p.d0;
@@ -814,7 +823,7 @@ void main() {
       hermite(Tx, Ty, mag * Math.cos(p.gT), mag * Math.sin(p.gT), topX, topY, mag * Math.cos(a1), mag * Math.sin(a1), u2, _tmp);
       const w = p.w;
       x = mix(_tmp.x, lx, w); y = mix(_tmp.y, ly, w);
-      foam = mix(0.9 * sstep(-1.2, -0.1, p.phi) * (1 - sstep(0.5, 1.5, p.phi)) * sstep(0.2, 0.5, u2) * (1 - sstep(0.5, 0.8, u2)), lfoam, w);
+      foam = mix(0.3 * sstep(-1.2, -0.1, p.phi) * (1 - sstep(0.5, 1.5, p.phi)) * sstep(0.2, 0.5, u2) * (1 - sstep(0.5, 0.8, u2)), lfoam, w);
       thin = mix(0.35, lthin, w); ao = mix(1, lao, w);
       arc = mix(Lface + u2 * 2.0 * p.d0, larc, w);
     } else if (s < 0.86) {                        // F: back of the wave
@@ -916,17 +925,19 @@ void main() {
   'use strict';
   const { W, S, SV, waveParams, facePoint, lipReach, faceHAtX, clamp, mix, sstep, DEG } = WM;
   const fp = {}, sp = {};
-  const THETA_MAX = 72 * DEG;      // steepest line up or down the face
-  const DRAG = 0.42 / SV;          // water drag (1/s), Froude-scaled
-  const V_PUMP_TOP = 80;           // m/s: pumping stops helping near 290 km/h
+  const THETA_MAX = 72 * DEG;      // reference carve angle for the pose and the autopilot; the board itself turns all the way round
+  const DRAG = 0.24 / SV;          // water drag (1/s), Froude-scaled and low, so speed carries: momentum
+  const VN_PUMP_TOP = 31;          // pumping stops helping near this speed (original-scale m/s), ~390 km/h on this wave
+  const KICK = 4 * SV;             // speed each press of pump adds, m/s (~50 km/h on this wave)
+  const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
   function createState() {
     return {
-      state: 'riding', t: 0, h: 0.45, z: 0, v: 12 * SV, theta: 0, carve: 0,
-      score: 0, dist: 0, barrelTime: 0, barrelRun: 0, bestRun: 0, inBarrel: false, airs: 0, topSpeed: 0,
+      state: 'riding', t: 0, h: 0.45, z: 0, v: 12 * SV, theta: 0, omega: 0, carve: 0,
+      score: 0, dist: 0, barrelTime: 0, barrelRun: 0, bestRun: 0, inBarrel: false, airs: 0, cutbacks: 0, topSpeed: 0,
       pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, fwd: { x: 0, y: 0, z: 1 }, nrm: { x: 0, y: 1, z: 0 },
-      peel: 13 * SV, wipeT: 0, reason: '', spin: 0, airT: 0, H: 24 * S, phi: -1, lam: 0, foam: 0, deepWarned: false, scraping: false, inWater: false,
-      legs: 1, tired: false, pump: 0, stall: 0
+      peel: 13 * SV, wipeT: 0, reason: '', spin: 0, airT: 0, H: 24 * S, phi: -1, lam: 0, foam: 0, deepWarned: false, lipWarned: false, scraping: false, inWater: false,
+      legs: 1, legsRest: 0, tired: false, pump: 0, stall: 0, kick: 0, boost: 0, thrPrev: 0, backT: 0
     };
   }
 
@@ -938,8 +949,8 @@ void main() {
     G.nrm.x = fp.nx; G.nrm.y = fp.ny; G.nrm.z = fp.nz;
   }
 
-  // One fixed step. steer in [-1,1] (+ carves up toward the lip), thr in [-1,1]
-  // (+ pumps, - stalls). Returns a list of events.
+  // One fixed step. steer in [-1,1] (+ turns toward the chest side: up the face while you head down the line),
+  // thr in [-1,1] (+ pumps, - stalls). Returns a list of events.
   function step(G, dt, steer, thr) {
     const ev = [];
     thr = thr || 0;
@@ -948,22 +959,34 @@ void main() {
     W.H = mix(24, 44, grow) * S * (1 + 0.04 * Math.sin(G.t * 0.21));
     G.peel = mix(13, 17.5, grow) * SV;
     W.zBreak += G.peel * dt;
+    const vn = G.v / SV;                                   // speed on the original wave's scale
 
-    // legs: pumping drains them, cruising refills them; run them flat and you have to rest
+    // legs: each press of pump kicks the board forward and holding it keeps driving; both drain the legs, cruising refills them
     const wantPump = Math.max(0, thr);
-    const pumpIn = G.tired ? 0 : wantPump;
-    G.legs = clamp(G.legs + (pumpIn > 0 ? -0.2 * pumpIn : 0.09) * dt, 0, 1);
+    const pumpIn = G.tired || G.state !== 'riding' ? 0 : wantPump;
+    const fade = 1 - sstep(VN_PUMP_TOP - 7, VN_PUMP_TOP, vn);
+    if (pumpIn > 0 && G.thrPrev <= 0) { G.kick += KICK * fade; G.legs -= 0.1; ev.push({ type: 'pump' }); }
+    G.thrPrev = thr;
+    if (pumpIn > 0) { G.legs -= 0.18 * pumpIn * dt; G.legsRest = 0; }
+    else { G.legsRest += dt; if (G.legsRest > 0.5) G.legs += 0.16 * dt; }
+    G.legs = clamp(G.legs, 0, 1);
     if (G.legs <= 0 && !G.tired) { G.tired = true; ev.push({ type: 'flash', text: 'Legs gone: cruise to recover', cls: 'red' }); }
     if (G.tired && G.legs > 0.35) G.tired = false;
     G.pump = pumpIn; G.stall = Math.max(0, -thr);
+    G.boost *= Math.exp(-dt * 2.2);
 
     if (G.state === 'riding') {
-      // carving: steer sets the turn rate; let go and the board slowly settles back to trim
-      const turnRate = 2.4 * (1 - 0.3 * sstep(30, 75, G.v));   // rad/s, stiffer at speed
-      if (steer !== 0) G.theta += steer * turnRate * dt;
-      else G.theta *= Math.exp(-dt * 0.9);
-      if (G.h <= 0 && G.theta < 0) G.theta *= Math.exp(-dt * 4);  // nowhere lower to go: the bottom turn starts itself
-      G.theta = clamp(G.theta, -THETA_MAX, THETA_MAX);
+      // carving: steer sets the turn rate and the board has a little weight, so it rolls into the turn.
+      // It turns all the way round: cut back toward the curl, then come round again.
+      const turnRate = 2.5 * (1 - 0.3 * sstep(12, 30, vn));   // rad/s, stiffer at speed
+      G.omega += (steer * turnRate - G.omega) * (1 - Math.exp(-dt * 8));
+      G.theta += G.omega * dt;
+      // let go and the board settles back to trim along whichever way it is heading
+      const trim = Math.cos(G.theta) >= 0 ? 0 : Math.PI;
+      let err = wrap(G.theta - trim);
+      if (steer === 0) err *= Math.exp(-dt * 0.9);
+      if (G.h <= 0 && Math.sin(G.theta) < 0) err *= Math.exp(-dt * 4);  // nowhere lower to go: the bottom turn starts itself
+      G.theta = wrap(trim + err);
       G.carve = steer;
       facePoint(G.h, G.z, G.t, fp);
       const sinT = Math.sin(G.theta), cosT = Math.cos(G.theta);
@@ -973,16 +996,21 @@ void main() {
       const phi = fp.phi, lam = fp.lam, d = G.z - W.zBreak;
       G.H = fp.H; G.phi = phi; G.lam = lam; G.foam = fp.foam;
       const steep = clamp(fp.ty * 1.15, 0, 1);
-      const pocket = (1 - sstep(0, 200 * S, d)) * (1 - sstep(0.85, 1.2, phi));
-      // the wave only really drives the board where the face is steep: trim high to go fast
-      const drive = 0.1 + 0.9 * sstep(0.4, 1.0, steep);
-      const push = (5.0 + 2.35 * pocket) * drive;
+      const pocket = 1 - sstep(0, 200 * S, d);              // the wave drives hardest near the break, less out on the shoulder
+      // the face drives the board wherever it is steep: trim mid to high on the face and you hold the pocket
+      const drive = 0.3 + 0.7 * sstep(0.25, 0.95, steep);
+      const push = (3.4 + 1.6 * pocket) * drive;
+      // deep in the tube the spit blows you forward; once the lip has landed behind you the churning foam ball drags you back in
+      const spit = cosT > 0 ? 1.2 * sstep(0.6, 0.95, phi) * (1 - sstep(0.95, 1.1, phi)) : 0;
+      const churn = 4.5 * sstep(1.0, 1.3, phi);
       const gravity = -9.8 * dy;
-      // pumping works best on a steep face and fades out near top speed; stalling digs the tail in
-      const pumpA = pumpIn * (1.6 + 3.4 * sstep(0.3, 0.9, steep)) * (1 - sstep(55, V_PUMP_TOP, G.v));
-      const stallA = G.stall * (2.5 + 0.12 * G.v);
-      const dv = push + pumpA - stallA - DRAG * G.v + gravity - (0.18 / SV) * G.v * sinT * sinT;
-      G.v = Math.max(0, G.v + dv * dt);
+      // pumping: a strong shove that works best on a steep face and fades out near top speed; stalling digs the tail in
+      const pumpA = pumpIn * (6 + 4 * sstep(0.3, 0.9, steep)) * fade;
+      const stallA = G.stall * (3 + 0.12 * G.v);
+      const kickNow = G.kick * (1 - Math.exp(-dt * 10)); G.kick -= kickNow;
+      const dv = push + spit - churn + pumpA - stallA - DRAG * G.v + gravity - (0.12 / SV) * G.v * sinT * sinT - (0.03 / SV) * G.v * Math.abs(G.omega);
+      G.v = Math.max(0, G.v + dv * dt + kickNow);
+      G.boost = Math.min(1, G.boost + kickNow / (2 * SV) + 0.8 * pumpIn * dt);
       G.topSpeed = Math.max(G.topSpeed, G.v);
       const Lface = 1.68 * fp.H;
       let dh = G.v * sinT / Lface;
@@ -992,25 +1020,37 @@ void main() {
       G.z += G.v * cosT * dt;
       G.dist = Math.max(G.dist, G.z);
 
+      // cutbacks: head back toward the curl, then come round again down the line
+      if (cosT < -0.2) G.backT += dt;
+      else if (cosT > 0.3) {
+        if (G.backT > 0.4) {
+          const pts = Math.round(200 + 300 * sstep(0, 0.8, phi));
+          G.score += pts; G.cutbacks++;
+          ev.push({ type: 'flash', text: (phi > 0.3 ? 'Cutback in the pocket +' : 'Cutback +') + pts, cls: 'amber' });
+        }
+        G.backT = 0;
+      }
+
       const reach = lipReach(G.z);
-      const covered = lam > 0.4 && reach > fp.x + 2.0 * S && phi > 0.08 && phi < 1.25 && G.h > 0.2;
+      const covered = lam > 0.4 && reach > fp.x + 2.0 * S && phi > 0.08 && phi < 1.3 && G.h > 0.15;
       if (covered && !G.inBarrel) ev.push({ type: 'flash', text: 'In the tube', cls: 'teal' });
-      if (phi > 0.95 && !G.deepWarned) { G.deepWarned = true; ev.push({ type: 'flash', text: 'Too deep! Pump!', cls: 'red' }); }
-      if (phi < 0.8) G.deepWarned = false;
+      if (phi > 1.0 && !G.deepWarned) { G.deepWarned = true; ev.push({ type: 'flash', text: 'Too deep! Pump!', cls: 'red' }); }
+      if (phi < 0.9) G.deepWarned = false;
       G.inBarrel = covered;
       if (covered) { G.barrelRun += dt; G.barrelTime += dt; G.score += dt * (80 + 140 * sstep(0.3, 1.1, phi)); }
       else {
         if (G.barrelRun > 1.0) { ev.push({ type: 'flash', text: 'Barrelled ' + G.barrelRun.toFixed(1) + ' s', cls: 'teal' }); G.score += 150 * G.barrelRun; }
         G.bestRun = Math.max(G.bestRun, G.barrelRun); G.barrelRun = 0;
       }
-      G.score += (G.v / SV) * cosT * dt;
+      G.score += vn * Math.abs(cosT) * dt;
 
       if (lam > 0.3 && G.h > 0.94) {
         // under the curl: riding high scrapes the ceiling and scrubs speed; only launching up into the lip gets you pitched
-        if (G.v * sinT > 11 * SV || G.v < 4 * SV) return wipeout(G, ev, 'Pitched over the falls');
+        if (G.v * sinT > 13 * SV || G.v < 3 * SV) return wipeout(G, ev, 'Pitched over the falls');
         if (!G.scraping) ev.push({ type: 'flash', text: 'Scraping the lip: drop down', cls: 'amber' });
         G.scraping = true;
-        G.h = 0.94; G.v *= Math.max(0, 1 - dt * 0.6 / SV); G.theta = Math.min(G.theta, 0.1);
+        G.h = 0.94; G.v *= Math.max(0, 1 - dt * 0.6 / SV);
+        if (sinT > 0.1) { G.theta = cosT >= 0 ? 0.1 : Math.PI - 0.1; G.omega = 0; }
       } else {
         G.scraping = false;
       }
@@ -1019,8 +1059,11 @@ void main() {
         return wipeout(G, ev, 'Drifted over the back and lost the wave');
       }
       if (G.h < 0) G.h = 0;
-      if (phi > 1.3) return wipeout(G, ev, 'Closed out: the tube collapsed on you');
-      if (G.h < 0.12 && phi > 0.55 && lam > 0.9) return wipeout(G, ev, 'The lip landed on you');
+      if (phi > 1.45) return wipeout(G, ev, 'Closed out: the tube collapsed on you');
+      // the lip lands in the trough: you get a warning first, then it lands on you if you are still down there
+      if (G.h < 0.2 && phi > 0.7 && phi < 1.2 && lam > 0.85 && !G.lipWarned) { G.lipWarned = true; ev.push({ type: 'flash', text: 'Lip’s landing: climb!', cls: 'red' }); }
+      if (G.h > 0.3 || phi < 0.6) G.lipWarned = false;
+      if (G.h < 0.08 && phi > 0.88 && phi < 1.25 && lam > 0.95) return wipeout(G, ev, 'The lip landed on you');
       if (G.h < 0.04 && G.v < 3.5 * SV) return wipeout(G, ev, 'Bogged down in the flats');
 
       G.pos.x = fp.x; G.pos.y = fp.y; G.pos.z = fp.z;
@@ -1039,10 +1082,10 @@ void main() {
       G.H = sp.H; G.phi = sp.phi; G.lam = sp.lam;
       if (G.airT > 0.15 && G.pos.y <= sp.y + 0.05) {
         if (G.pos.x < sp.x - 0.5 * S || hL >= 0.999) return wipeout(G, ev, 'Flew over the back and lost the wave');
-        G.h = hL; G.state = 'riding'; G.theta = 0; G.airs++;
+        G.h = hL; G.state = 'riding'; G.theta = G.vel.z < 0 ? Math.PI : 0; G.omega = 0; G.airs++;
         G.v = Math.max(6 * SV, Math.hypot(G.vel.x, G.vel.z) * 0.8);
         G.score += 150; ev.push({ type: 'flash', text: 'Air +150', cls: 'amber' }); ev.push({ type: 'landed' });
-        G.nrm.x = sp.nx; G.nrm.y = sp.ny; G.nrm.z = sp.nz; G.fwd.x = 0; G.fwd.y = 0; G.fwd.z = 1;
+        G.nrm.x = sp.nx; G.nrm.y = sp.ny; G.nrm.z = sp.nz; G.fwd.x = 0; G.fwd.y = 0; G.fwd.z = G.vel.z < 0 ? -1 : 1;
       } else if (G.airT > 4 * SV) {
         return wipeout(G, ev, 'Lost the wave');
       }
@@ -1119,7 +1162,7 @@ void main() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Qc.dpr));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 40000);
+  const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 60000);
   scene.add(camera);
 
   const sunDir = new THREE.Vector3(-0.35, 0.42, 0.84).normalize();
@@ -1127,8 +1170,8 @@ void main() {
   const skyZenith = new THREE.Vector3(0.14, 0.38, 0.74);
   const skyHorizon = new THREE.Vector3(0.80, 0.87, 0.93);
   const fogCol = new THREE.Vector3(0.76, 0.84, 0.91);
-  // fog starts further out than before so the whole 150-260 m face reads, but still hazes the far shoulder (aerial perspective sells the size)
-  const fogNear = 420, fogFar = 5200;
+  // fog starts far enough out that the whole 290-530 m face reads, but still hazes the far shoulder (aerial perspective sells the size)
+  const fogNear = 70 * S, fogFar = 870 * S;
   renderer.setClearColor(new THREE.Color(fogCol.x, fogCol.y, fogCol.z), 1);
 
   const lightUniforms = () => ({
@@ -1144,13 +1187,13 @@ void main() {
 
   // sky dome
   const skyMat = new THREE.ShaderMaterial({ vertexShader: SH.skyVert, fragmentShader: SH.skyFrag, uniforms: lightUniforms(), side: THREE.BackSide, depthWrite: false });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(20000, 40, 20), skyMat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(30000, 40, 20), skyMat);
   sky.frustumCulled = false;
   scene.add(sky);
 
   // distant ocean
   const oceanMat = new THREE.ShaderMaterial({ vertexShader: SH.oceanVert, fragmentShader: SH.oceanFrag, uniforms: lightUniforms() });
-  const ocean = new THREE.Mesh(new THREE.PlaneGeometry(80000, 80000, 1, 1), oceanMat);
+  const ocean = new THREE.Mesh(new THREE.PlaneGeometry(120000, 120000, 1, 1), oceanMat);
   ocean.rotation.x = -Math.PI / 2;
   ocean.position.y = -0.45 * S;
   ocean.frustumCulled = false;
@@ -1213,7 +1256,7 @@ void main() {
       const downtown = Math.exp(-Math.pow(((z % 9000) + 9000) % 9000 / 1400 - 3.2, 2)); // a cluster of towers every 9 km
       const h = 18 + rnd() * 70 + downtown * rnd() * 240;
       const w = 25 + rnd() * 55, dpt = 25 + rnd() * 55;
-      m.makeScale(w, h, dpt); m.setPosition(rnd() * 900, -2, z);
+      m.makeScale(w, h + 30, dpt); m.setPosition(rnd() * 900, -30, z); // base sits below the swell so no tower floats
       inst.setMatrixAt(i, m);
       c.setRGB(0.18 + rnd() * 0.08, 0.27 + rnd() * 0.06, 0.34 + rnd() * 0.06).lerp(haze, 0.55 + rnd() * 0.1);
       inst.setColorAt(i, c);
@@ -1465,7 +1508,7 @@ void main() {
   const SP = window.SurfPhysics;
   const G = SP.createState();
   G.mode = 'title';          // title | play | over
-  const UI = { camMode: 0, best: 0, hudT: 0, flashT: 0, steer: 0, thr: 0 };
+  const UI = { camMode: 0, best: 0, hudT: 0, flashT: 0, steer: 0, thr: 0, labelsBack: false };
   try { UI.best = parseInt(localStorage.getItem('tsunami.best') || '0', 10) || 0; } catch (e) { UI.best = 0; }
   try { const cm = parseInt(localStorage.getItem('tsunami.cam') || '0', 10); if (cm >= 0 && cm < 6) UI.camMode = cm; } catch (e) { /* ignore */ }
 
@@ -1491,6 +1534,7 @@ void main() {
   function handleEvents(ev) {
     for (const e of ev) {
       if (e.type === 'flash') { if (G.mode === 'play') flash(e.text, e.cls); if (e.text.indexOf('Barrelled') === 0 && parseFloat(e.text.slice(10)) >= 2.5) anim.claim = 1.6; }
+      else if (e.type === 'pump') { pumpBurst = 1; }
       else if (e.type === 'splash') { for (let i = 0; i < 160; i++) splash.emit(G.pos.x, G.pos.y, G.pos.z, (Math.random() - 0.5) * 16, 3 + Math.random() * 16, (Math.random() - 0.5) * 16, 1.4 + Math.random() * 2, 1.5 + Math.random() * 4.5, 0.9); }
       else if (e.type === 'wipeout') {
         for (let i = 0; i < 120; i++) splash.emit(G.pos.x, G.pos.y, G.pos.z, (Math.random() - 0.5) * 12, Math.random() * 14, (Math.random() - 0.5) * 12, 1.2 + Math.random() * 1.8, 1.2 + Math.random() * 3.5, 0.9);
@@ -1508,14 +1552,14 @@ void main() {
     if (s > UI.best) { UI.best = s; try { localStorage.setItem('tsunami.best', String(s)); } catch (e) { /* ignore */ } }
     $('over-reason').textContent = G.reason + '.';
     $('over-score').textContent = s.toLocaleString();
-    $('over-stats').textContent = Math.round(G.dist).toLocaleString() + ' m ridden, top speed ' + Math.round(G.topSpeed * 3.6) + ' km/h, ' + G.barrelTime.toFixed(1) + ' s in the tube' + (G.bestRun >= 1 ? ' (longest ' + G.bestRun.toFixed(1) + ' s)' : '') + (G.airs ? ', ' + G.airs + (G.airs === 1 ? ' air' : ' airs') : '') + '. Best ' + UI.best.toLocaleString() + '.';
+    $('over-stats').textContent = Math.round(G.dist).toLocaleString() + ' m ridden, top speed ' + Math.round(G.topSpeed * 3.6) + ' km/h, ' + G.barrelTime.toFixed(1) + ' s in the tube' + (G.bestRun >= 1 ? ' (longest ' + G.bestRun.toFixed(1) + ' s)' : '') + (G.airs ? ', ' + G.airs + (G.airs === 1 ? ' air' : ' airs') : '') + (G.cutbacks ? ', ' + G.cutbacks + (G.cutbacks === 1 ? ' cutback' : ' cutbacks') : '') + '. Best ' + UI.best.toLocaleString() + '.';
     $('over').classList.add('on');
     $('hud').classList.remove('on');
   }
 
   // ------------------------------------------------------------ surfer placement + spray
   const mBasis = new THREE.Matrix4(), F = new THREE.Vector3(), N = new THREE.Vector3(), R = new THREE.Vector3(), N2 = new THREE.Vector3(), R2 = new THREE.Vector3(), tailP = new THREE.Vector3(), tmpV = new THREE.Vector3();
-  let sprayAcc = 0, foamAcc = 0, mistAcc = 0;
+  let sprayAcc = 0, foamAcc = 0, mistAcc = 0, pumpBurst = 0;
   function placeSurfer(dt) {
     const root = surfer.root;
     const carve = G.carve || 0;
@@ -1523,18 +1567,19 @@ void main() {
       root.position.set(G.pos.x, G.pos.y, G.pos.z);
       F.set(G.fwd.x, G.fwd.y, G.fwd.z); N.set(G.nrm.x, G.nrm.y, G.nrm.z);
       R.crossVectors(N, F).normalize();            // right-handed: R = N x F points to the trough side
-      // rail roll: the line you hold plus how hard you are carving right now (climbing dips the wall-side rail)
-      const roll = clamp(0.2 * G.theta / SP.THETA_MAX + 0.4 * carve, -0.6, 0.6);
+      // rail roll: how hard the board is turning plus how hard you are pushing on it right now
+      const roll = clamp(0.16 * G.omega + 0.3 * carve, -0.6, 0.6);
       R2.copy(R).multiplyScalar(Math.cos(roll)).addScaledVector(N, Math.sin(roll));
       N2.copy(N).multiplyScalar(Math.cos(roll)).addScaledVector(R, -Math.sin(roll));
       mBasis.makeBasis(R2, N2, F);
       root.quaternion.setFromRotationMatrix(mBasis);
       const vn = G.v / SV; // speed on the original scale, for the pose and spray tuning
       const crouch = clamp(0.25 + 0.45 * sstep(10, 22, vn) + (G.inBarrel ? 0.45 : 0) + 0.2 * Math.max(0, -carve), 0, 1);
-      poseSurfer(dt, { crouch, lean: clamp(carve + 0.5 * G.theta / SP.THETA_MAX, -1, 1), drag: G.inBarrel ? 1 : 0, nose: clamp((vn - 14) / 10, -1, 1), speed: vn, pump: G.pump, stall: G.stall, mode: 'ride' });
+      poseSurfer(dt, { crouch, lean: clamp(carve + 0.25 * G.omega, -1, 1), drag: G.inBarrel ? 1 : 0, nose: clamp((vn - 14) / 10, -1, 1), speed: vn, pump: G.pump, stall: G.stall, mode: 'ride' });
       // board spray from the tail: carving, speed and stalling all throw more
       tailP.copy(root.position).addScaledVector(F, -1.2).addScaledVector(N, 0.05);
-      const rate = 14 + 140 * Math.abs(carve) * sstep(6, 16, vn) + 30 * sstep(14, 24, vn) + 160 * G.stall;
+      const rate = 14 + 140 * Math.abs(carve) * sstep(6, 16, vn) + 30 * sstep(14, 24, vn) + 160 * G.stall + 90 * G.pump + 900 * pumpBurst;
+      pumpBurst = Math.max(0, pumpBurst - dt * 5);
       sprayAcc += rate * dt;
       while (sprayAcc > 1) {
         sprayAcc -= 1;
@@ -1571,7 +1616,7 @@ void main() {
       mistAcc += (10 + G.v * 1.1) * dt;
       while (mistAcc > 1) {
         mistAcc -= 1;
-        const lead = G.v * (0.8 + Math.random() * 1.6);
+        const lead = G.v * (0.8 + Math.random() * 1.6) * Math.cos(G.theta);
         const h = clamp(G.h + (Math.random() - 0.5) * 0.25, 0.02, 0.9);
         facePoint(h, G.pos.z + lead, G.t, fp);
         const off = 1.5 + Math.random() * 14;
@@ -1591,7 +1636,7 @@ void main() {
       if (Math.random() > n - i) break;
       const z = zb + (Math.random() * 1.9 - 1.1) * LT;
       surfacePoint(0.66, z, G.t, sp);
-      lipMist.emit(sp.x + Math.random() * S, sp.y + 0.5 * S, z, (-5 - Math.random() * 7) * SV, (2 + Math.random() * 5) * SV, (Math.random() - 0.5) * 3 * SV, (1.6 + Math.random() * 1.6) * SV, (1.4 + Math.random() * 2.2) * S * 0.8, 0.45);
+      lipMist.emit(sp.x + Math.random() * S, sp.y + 0.5 * S, z, (-5 - Math.random() * 7) * SV, (2 + Math.random() * 5) * SV, (Math.random() - 0.5) * 3 * SV, (1.6 + Math.random() * 1.6) * SV, (1.4 + Math.random() * 2.2) * S * 0.6, 0.4);
     }
     n = (isMobile ? 50 : 80) * dt;
     for (let i = 0; i < n; i++) {
@@ -1616,7 +1661,8 @@ void main() {
   // the whole face, a low shot from the trough looking up the wall, a fixed
   // fly-by the surfer screams past, and a tube cam while you are barrelled.
   const CAM_MODES = ['auto', 'chase', 'close', 'heli', 'trough', 'channel'];
-  const cam = { shot: 'chase', shotT: 0, nextCut: 8, rot: 0, init: false, cut: false, roll: 0, t: 0, fov: 66, flyP: new THREE.Vector3(), outOfTube: 0 };
+  // dir follows which way along the wave the board is heading (+1 down the line, -1 cutting back toward the curl)
+  const cam = { shot: 'chase', shotT: 0, nextCut: 8, rot: 0, init: false, cut: false, roll: 0, t: 0, fov: 66, flyP: new THREE.Vector3(), outOfTube: 0, dir: 1 };
   const SHOT_LEN = { heli: 5.5, trough: 4.5, flyby: 6, tube: 99 };
   const CINE = { heli: 1, trough: 1, flyby: 1, wipe: 1 };
   const camPos = new THREE.Vector3(), camTgt = new THREE.Vector3(), camWantP = new THREE.Vector3(), camWantT = new THREE.Vector3(), camUp = new THREE.Vector3(0, 1, 0);
@@ -1638,8 +1684,11 @@ void main() {
     if (G.state === 'wipeout' || G.state === 'over') return;
     const s = cam.shot;
     if (G.state === 'air') { if (s !== 'heli') setShot('heli'); return; }
-    if (G.inBarrel && G.barrelRun > 0.6) { cam.outOfTube = 0; if (s !== 'tube') setShot('tube'); return; }
-    if (s === 'tube') { cam.outOfTube += dt; if (cam.outOfTube > 0.7) setShot('chase'); return; }
+    const headingOut = Math.cos(G.theta) > 0.3;
+    if (G.inBarrel && G.barrelRun > 0.6 && headingOut) { cam.outOfTube = 0; if (s !== 'tube') setShot('tube'); return; }
+    if (s === 'tube') { cam.outOfTube += dt; if (cam.outOfTube > 0.7 || !headingOut) setShot('chase'); return; }
+    // cutting back: the wide shots are all planted down the line, so give the player the chase cam
+    if (!headingOut) { if (s !== 'chase') setShot('chase'); return; }
     // danger: give the player the playable view
     if (G.phi > 0.9 || G.scraping || G.h < 0.05) { if (s !== 'chase' && cam.shotT > 1.2) setShot('chase'); return; }
     if (s === 'chase') {
@@ -1671,7 +1720,10 @@ void main() {
     else if (cam.shot === 'wipe') setShot(mode === 'auto' ? 'chase' : mode);
     if (!wiping) { if (mode === 'auto') direct(dt); else if (cam.shot !== mode) setShot(mode); }
     const shot = cam.shot;
-    const v = G.v, vk = sstep(15, 70, v);      // 0 at cruising speed, 1 flat out
+    const v = G.v, vk = sstep(10 * SV, 28 * SV, v);      // 0 at cruising speed, 1 flat out
+    // swing round behind the board as it cuts back and comes round again
+    const dirWant = G.state === 'riding' ? Math.cos(G.theta) : Math.sign(G.vel.z || 1);
+    cam.dir += (dirWant - cam.dir) * (1 - Math.exp(-dt * 2.2));
     const lipK = sstep(0.1, 0.5, G.lam || 0);
     let fov = 66, kP = 4.5, kT = 6, rollK = 0, shakeK = 0.3;
 
@@ -1717,15 +1769,19 @@ void main() {
       const dropM = close ? 1.2 : 2.5 + 3 * vk;
       if (G.inBarrel) { back = Math.min(back, 11); }
       // keep the camera ahead of the collapsing section of the tube
-      const phiCam = -((G.z - back) - W.zBreak) / W.LT;
-      if (phiCam > 0.98) back = Math.max(4, back - (phiCam - 0.98) * W.LT);
+      const dir = cam.dir;
+      const phiCam = -((G.z - back * dir) - W.zBreak) / W.LT;
+      if (phiCam > 0.98 && dir > 0.3) back = Math.max(4, back - (phiCam - 0.98) * W.LT);
       const hCam = clamp(G.h - dropM / (1.68 * Hn), 0.0, 0.62);
-      facePoint(hCam, G.z - back, G.t, cp);
-      camWantP.set(cp.x + cp.nx * lift, cp.y + cp.ny * lift + 0.4, cp.z + cp.nz * lift);
-      const ahead = (close ? 8 : 12) + 0.35 * v;
-      const tilt = (close ? 1.5 : 3) + Hn * (0.03 + 0.05 * lipK);
+      facePoint(hCam, G.z - back * dir, G.t, cp);
+      // mid-turn (heading up or down the face) the camera stands off the face to keep the same distance
+      const off = lift + (1 - Math.abs(dir)) * back * 0.9;
+      camWantP.set(cp.x + cp.nx * off, cp.y + cp.ny * off + 0.4, cp.z + cp.nz * off);
+      const ahead = ((close ? 8 : 12) + 0.35 * v) * dir;
+      // capped: on a 500 m wall, tilting up to the lip would push the surfer out of the bottom of the frame
+      const tilt = (close ? 1.5 : 3) + Math.min(Hn * (0.03 + 0.05 * lipK), 6 + 8 * lipK);
       camWantT.set(G.pos.x - 1.0, G.pos.y + 1.4 + tilt, G.pos.z + ahead);
-      fov = (portrait ? 84 : 66) + 16 * vk + 8 * lipK + (close ? 6 : 0);
+      fov = (portrait ? 84 : 66) + 16 * vk + 8 * lipK + (close ? 6 : 0) + 14 * (G.boost || 0);
       rollK = 1; shakeK = 1;
     }
 
@@ -1741,7 +1797,7 @@ void main() {
     camera.rotateZ(cam.roll);
     // shake: speed, the lip right overhead, and scraping the ceiling all rattle the lens
     if (!reducedMotion && G.state === 'riding') {
-      const a = shakeK * (0.0015 + 0.006 * sstep(35, 75, v) + 0.005 * (G.inBarrel ? 1 : 0) + 0.006 * (G.scraping ? 1 : 0) + 0.003 * G.stall);
+      const a = shakeK * (0.0015 + 0.006 * sstep(16 * SV, 28 * SV, v) + 0.005 * (G.inBarrel ? 1 : 0) + 0.006 * (G.scraping ? 1 : 0) + 0.003 * G.stall + 0.004 * G.boost);
       const t = cam.t;
       camera.rotateX(a * (Math.sin(t * 23.1) + 0.6 * Math.sin(t * 37.7 + 1.3)));
       camera.rotateY(a * (Math.sin(t * 19.3 + 2.1) + 0.6 * Math.sin(t * 41.9)));
@@ -1855,13 +1911,13 @@ void main() {
   function showHint() {
     hintT = 9;
     $('hint').textContent = isTouch
-      ? 'Left and right carve your line. ▲ pumps for speed, ▼ stalls to let the lip catch you. Stay just ahead of the breaking lip.'
-      : '← → carve your line, ↑ pumps for speed, ↓ stalls. Stay just ahead of the breaking lip.';
+      ? 'Left and right carve: keep turning to cut back toward the curl, then come round. Tap ▲ for a burst of speed, hold it to keep driving. ▼ stalls.'
+      : '← → carve: keep turning to cut back toward the curl, then come round. Tap ↑ for a burst of speed, hold it to keep driving. ↓ stalls.';
     $('hint').classList.add('on');
   }
   $('ctrl-desc').textContent = isTouch
-    ? 'Drop and climb carve the board (hold to keep turning, let go and it settles). Pump to speed up, stall to slow down, or drag your thumb: sideways carves, up pumps, down stalls.'
-    : 'Left / right (A / D) carve: hold to keep turning, let go and the board settles. Up (W) pumps for speed while your legs last, down (S) stalls. C changes the camera, P pauses.';
+    ? 'The arrows carve the board: hold to keep turning, let go and it settles. Keep turning to cut back toward the curl, then come round again. Tap pump for a burst of speed or hold it to keep driving while your legs last; stall to slow down. Or drag your thumb: sideways carves, up pumps, down stalls.'
+    : 'Left / right (A / D) carve: hold to keep turning, let go and the board settles. Keep turning to cut back toward the curl, then come round again. Up (W) pumps: tap for a burst of speed, hold to keep driving while your legs last. Down (S) stalls. C changes the camera, P pauses.';
 
   // ------------------------------------------------------------ HUD
   const tagV = new THREE.Vector3();
@@ -1873,7 +1929,7 @@ void main() {
     // speed lines (every frame so they flicker)
     const fx = $('speedfx');
     const near = cam.shot === 'chase' || cam.shot === 'close' || cam.shot === 'tube';
-    const fxA = (G.mode === 'play' && G.state === 'riding' && near && !paused) ? sstep(30, 70, G.v) * 0.55 : 0;
+    const fxA = (G.mode === 'play' && G.state === 'riding' && near && !paused) ? Math.min(0.75, sstep(16 * SV, 27 * SV, G.v) * 0.55 + 0.45 * G.boost) : 0;
     fx.style.opacity = fxA.toFixed(3);
     if (fxA > 0) { fxRot = (fxRot + 7.3) % 360; fx.style.transform = 'rotate(' + fxRot.toFixed(1) + 'deg) scale(' + (1 + 0.04 * Math.random()).toFixed(3) + ')'; }
     // surfer tag in the wide shots
@@ -1888,9 +1944,16 @@ void main() {
     tag.classList.toggle('on', showTag);
     if (UI.hudT < 0.1) return;
     UI.hudT = 0;
+    // the carve buttons turn the board, so which one climbs depends on which way along the wave you are heading
+    const backL = G.state === 'riding' && Math.cos(G.theta) < 0;
+    if (backL !== UI.labelsBack) {
+      UI.labelsBack = backL;
+      $('btn-l-t').textContent = backL ? 'climb' : 'drop'; $('btn-l').setAttribute('aria-label', backL ? 'Carve up the wave' : 'Carve down the face');
+      $('btn-r-t').textContent = backL ? 'drop' : 'climb'; $('btn-r').setAttribute('aria-label', backL ? 'Carve down the face' : 'Carve up the wave');
+    }
     $('score').textContent = Math.round(G.score).toLocaleString();
     $('speed').textContent = Math.round(G.v * 3.6);
-    $('st-speed').classList.toggle('fast', G.v > 50);
+    $('st-speed').classList.toggle('fast', G.v > 22 * SV || G.boost > 0.3);
     const H = G.H || W.H;
     $('height').textContent = Math.round(H);
     $('dist').textContent = Math.round(G.dist).toLocaleString();
@@ -1967,7 +2030,7 @@ void main() {
     ocean.position.x = camera.position.x; ocean.position.z = camera.position.z;
     ocean.position.y = -1.15 * W.H / 26; // just under the deepest swell trough
     // the city on the horizon creeps closer as the wave runs at it
-    city.position.x = Math.max(3400, 7200 - 22 * G.t);
+    city.position.x = Math.max(4600, 9000 - 26 * G.t);
     renderer.render(scene, camera);
   }
   SP.reset(G); G.mode = 'title'; W.zBreak = -90 * S;
