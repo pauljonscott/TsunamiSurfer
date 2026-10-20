@@ -972,25 +972,25 @@ void main() {
     G.pump = G.pumpF; G.stall = G.stallF;
     G.boost *= Math.exp(-dt * 1.5);
     // the rider's lean: a damped spring driven by the input
-    G.leanV += (38 * (steer - G.lean) - 8.5 * G.leanV) * dt;
+    G.leanV += (90 * (steer - G.lean) - 14 * G.leanV) * dt;
     G.lean += G.leanV * dt;
 
     if (G.state === 'riding') {
       // carving: the lean sets the rail and the rail sets the turn rate; the faster you go the wider the arc
       // (a lateral-grip limit, like a real rail). It turns all the way round: cut back toward the curl, then come round again.
       const st = G.lean;
-      const omegaMax = clamp(45 / Math.max(G.v, 1), 0.8, 1.8);           // rad/s
+      const omegaMax = clamp(85 / Math.max(G.v, 1), 1.4, 2.8);           // rad/s
       const trim = Math.cos(G.theta) >= 0 ? 0 : Math.PI;
       const err = wrap(G.theta - trim);
       const sinNow = Math.sin(G.theta);
       // soft limits: in the trough the bottom turn starts itself, at the crest (or under the lip) the board is turned back down
-      const atFloor = G.h <= 0.005 && sinNow < -0.05;
-      const atCeil = G.h >= CEIL - 0.01 && sinNow > 0.05;
+      // (they fade in over the last few percent of the face, so the board is eased round rather than snapped)
+      const limitK = sinNow < 0 ? 1 - sstep(0, 0.04, G.h) : sstep(CEIL - 0.06, CEIL, G.h);
       let omegaWant = st * omegaMax;
       if (Math.abs(steer) < 0.05) omegaWant -= 0.3 * err;                // let go: the board carries its line, drifting gently back to trim
-      if (atFloor || atCeil) omegaWant = -2.2 * err;
-      if (G.foamK > 0.3) omegaWant = -1.5 * wrap(G.theta);                // in the whitewater the bore swings you round to run with it
-      G.omega += (omegaWant - G.omega) * (1 - Math.exp(-dt * 5));
+      omegaWant = mix(omegaWant, -2.2 * err, limitK * sstep(0.02, 0.15, Math.abs(sinNow)));
+      omegaWant = mix(omegaWant, clamp(-1.5 * wrap(G.theta), -2, 2), sstep(0.2, 0.8, G.foamK)); // the whitewater bore eases you round to run with it
+      G.omega += (omegaWant - G.omega) * (1 - Math.exp(-dt * 10));
       G.theta = wrap(G.theta + G.omega * dt);
       G.carve = G.lean;
       facePoint(G.h, G.z, G.t, fp);
@@ -1009,7 +1009,7 @@ void main() {
       // and carries you back out toward the pocket (a little faster than the peel), so you can always ride on through
       const spit = cosT > 0 ? 1.2 * sstep(0.6, 0.95, phi) * (1 - sstep(0.95, 1.1, phi)) : 0;
       G.foamK = sstep(1.15, 1.4, phi);
-      const bore = G.foamK * 1.4 * (G.peel * 1.3 * Math.max(cosT, 0) - G.v);
+      const bore = G.foamK * clamp(1.4 * (G.peel * 1.3 * Math.max(cosT, 0) - G.v), -5, 6);
       const gravity = -9.8 * dy;
       // pumping: a strong shove that works best on a steep face and fades out near top speed; stalling digs the tail in
       // each compression of the pump rhythm drives the board (mean of the beat factor is 1)
@@ -1784,8 +1784,12 @@ void main() {
       // with its "up" leaned toward the face so the face reads as the ground. Where you are going is up the
       // screen and the left / right buttons turn the board left / right on screen; climb and you look up at the lip.
       const close = shot === 'close';
-      fwdWant.set(G.fwd.x, G.fwd.y, G.fwd.z);
-      if (G.state !== 'riding' || fwdWant.lengthSq() < 0.5) fwdWant.set(0, 0, Math.sign(G.vel.z || 1));
+      // the camera stays aligned with the wave (down the line, or back toward the curl once a cutback is committed)
+      // and takes only a share of the board's heading, so a carve shows as the board swinging across the screen
+      if (G.state === 'riding') { const ct = Math.cos(G.theta); if (ct > 0.3) cam.lineSign = 1; else if (ct < -0.3) cam.lineSign = -1; }
+      const ls = cam.lineSign || 1;
+      fwdWant.set(0.3 * G.fwd.x, 0.2 * G.fwd.y, 0.3 * G.fwd.z + ls);
+      if (G.state !== 'riding') fwdWant.set(0, 0, Math.sign(G.vel.z || ls));
       camFwd.lerp(fwdWant, 1 - Math.exp(-dt * 1.3)).normalize();
       nrmV.set(G.nrm.x, G.nrm.y, G.nrm.z);
       let back = (close ? 8 : 11) + 5 * vk;
@@ -1794,8 +1798,7 @@ void main() {
       const ahead = (close ? 8 : 10) + 0.12 * v;
       // the view leans toward looking along the wave (which way is remembered through a cutback) and its pitch is
       // flattened, so pointing straight up or down the face still shows the line and the horizon, not a wall of water
-      if (Math.abs(camFwd.z) > 0.5) cam.lineSign = Math.sign(camFwd.z);
-      lookFwd.set(0.45 * camFwd.x, 0.25 * camFwd.y, camFwd.z + 0.55 * (cam.lineSign || 1)).normalize();
+      lookFwd.set(camFwd.x, 0.3 * camFwd.y, camFwd.z).normalize();
       camWantP.copy(surfer.root.position).addScaledVector(lookFwd, -back).addScaledVector(nrmV, off);
       camWantP.y = Math.max(camWantP.y + 1.0, surfer.root.position.y + 2);
       camWantT.copy(surfer.root.position).addScaledVector(lookFwd, ahead).addScaledVector(nrmV, 0.6);
