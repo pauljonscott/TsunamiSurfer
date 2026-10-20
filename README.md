@@ -6,26 +6,27 @@ A single-file three.js surf game: ride a 290–530 m wave as it peels down the l
 
 | Action | Keyboard | Phone |
 | --- | --- | --- |
-| Lean into a carve | ← / → (A / D) | Put your thumb down anywhere on the water and drag sideways (a floating thumb-stick; further = harder) |
-| Pump for speed | hold ↑ (W) | hold the big PUMP button |
-| Stall (dig the tail in, slow down) | ↓ (S) | pull the thumb-stick down |
+| Go that way | arrows / WASD point on screen | put your thumb down anywhere and push the way you want to go (a floating thumb-stick) |
+| Pump for speed | hold Space | hold PUMP |
+| Stall (dig the tail in) | hold Shift | hold STALL |
 | Change camera | C | Camera button (top centre) |
 | Pause / end the ride | P | II button |
 
-The touch scheme follows how mobile surf games like True Surf work: you drive the board with a thumb on the wave rather than with buttons, so the four on-screen buttons became one floating analog stick plus a hold-to-pump button.
+You point where you want to go and the board carves round to follow. It turns harder the further you push, and arcs get wider at speed. Let go and it holds its line. Directions are read through the camera: in the chase cam, up the screen is along the wave and sideways is up or down the face. Nothing steers the board except you.
 
-The rider has weight. Your input drives their lean through a spring, so they take a beat to commit and settle with a little give. The lean sets the rail, and the rail sets the turn, with wider arcs the faster you go. Let go and the board carries its line. Board and rider bank into turns, the legs load up in hard carves, and the arms swing when you change edge. Holding pump starts a steady compress-and-extend rhythm: each compression drives the board, and the board bobs and pitches under the rider.
+Go anywhere. Cut back into the curl, ride as deep in the tube as you like, or carry speed up an unbroken crest and over the top: you either launch an air or slide over and down the back. Airs land wherever you come down. A pitching lip is a ceiling you scrape along, from the front or from behind. Run out of speed climbing the wall and the board stalls and falls back round.
 
-There are no warnings or instructions on screen during a ride, only small score pops for barrels, airs and cutbacks. Ride the tube as deep as you like. Get caught behind the break and the whitewater picks you up and carries you back out. The only wipeout is the lip landing right on top of you in the trough. Rides go on until you end them from the pause menu.
+The only wipeout is the lip landing right on top of you in the trough. Slide off the back into the flats and the ride ends. Otherwise you ride until you end it from the pause menu.
+
+The board sits in the water and draws a foam line on the face behind it. There is no HUD clutter: score, speed and wave height, plus small score pops for barrels, airs and cutbacks.
 
 ## Cameras
 
-- **auto** (default): on desktop, a director that cuts between the chase cam and a helicopter shot, a fly-by, and a low shot from the trough, going into the tube while you're barrelled. On a phone it stays on the chase cam (and the tube), so the rider is always big enough to see.
-- **chase / close** (landscape): pull back and widen with speed, kick wider when you pump, and swing round behind you when you cut back toward the curl; the lens shakes at high speed and under the lip.
-- **chase / close** (portrait phone): a close third-person camera behind the board that swings round after you with a deliberate delay. It keeps looking along the wave, so you see the line ahead or the curl pitching over you on a cutback.
+There is one steady camera at a time and it never cuts on its own.
 
-The follow cameras smooth their offset from the rider, not their world position, so the turn delay never turns into the camera dropping behind at speed.
-- **heli / trough / channel**: wide shots that show the whole wave, with a tag marking where you are.
+- **chase** (default): behind the surfer, looking along the wave, with the wall on one side and the open ocean on the other. It doesn't turn with the board; it swings round only once you commit to a cutback. Its position trails your turns (you feel the delay), but its aim stays locked on the rider, so you never leave the frame.
+- **side**: a water photographer's angle, out in front of the face and down the line, looking back at the rider with the wall behind them.
+- **heli**: a helicopter shot of the whole wave, with a tag marking where you are.
 
 ## Scale
 
