@@ -918,6 +918,11 @@ void main() {
 //
 // Controls: steer carves (it sets the turn rate, so a held line stays held),
 // thr > 0 pumps for speed (costs legs), thr < 0 stalls on the tail.
+//
+// The board has weight: inputs are eased in, the turn rate builds and decays
+// with angular inertia (and big, fast boards carve wide arcs), and speed only
+// changes through forces, so nothing snaps. The only things that end a ride
+// are water hitting you hard: the lip landing on you or the tube collapsing.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./wave.js'));
   else root.SurfPhysics = factory(root.WaveModel);
@@ -928,7 +933,9 @@ void main() {
   const THETA_MAX = 72 * DEG;      // reference carve angle for the pose and the autopilot; the board itself turns all the way round
   const DRAG = 0.24 / SV;          // water drag (1/s), Froude-scaled and low, so speed carries: momentum
   const VN_PUMP_TOP = 31;          // pumping stops helping near this speed (original-scale m/s), ~390 km/h on this wave
-  const KICK = 4 * SV;             // speed each press of pump adds, m/s (~50 km/h on this wave)
+  const KICK = 2.2 * SV;           // speed each press of pump adds, m/s (~27 km/h on this wave)
+  const KICK_T = 0.8;              // ...delivered as a smooth surge over this many seconds, not a jolt
+  const CEIL = 0.95;               // highest the board rides on the face before the crest turns it back
   const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
   function createState() {
@@ -937,7 +944,8 @@ void main() {
       score: 0, dist: 0, barrelTime: 0, barrelRun: 0, bestRun: 0, inBarrel: false, airs: 0, cutbacks: 0, topSpeed: 0,
       pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, fwd: { x: 0, y: 0, z: 1 }, nrm: { x: 0, y: 1, z: 0 },
       peel: 13 * SV, wipeT: 0, reason: '', spin: 0, airT: 0, H: 24 * S, phi: -1, lam: 0, foam: 0, deepWarned: false, lipWarned: false, scraping: false, inWater: false,
-      legs: 1, legsRest: 0, tired: false, pump: 0, stall: 0, kick: 0, boost: 0, thrPrev: 0, backT: 0
+      legs: 1, legsRest: 0, tired: false, pump: 0, stall: 0, kicks: [], boost: 0, thrPrev: 0, backT: 0,
+      steerF: 0, pumpF: 0, stallF: 0, ceilWarned: false
     };
   }
 
@@ -965,29 +973,38 @@ void main() {
     const wantPump = Math.max(0, thr);
     const pumpIn = G.tired || G.state !== 'riding' ? 0 : wantPump;
     const fade = 1 - sstep(VN_PUMP_TOP - 7, VN_PUMP_TOP, vn);
-    if (pumpIn > 0 && G.thrPrev <= 0) { G.kick += KICK * fade; G.legs -= 0.1; ev.push({ type: 'pump' }); }
+    if (pumpIn > 0 && G.thrPrev <= 0 && G.kicks.length < 3) { G.kicks.push({ t: 0, a: KICK * fade }); G.legs -= 0.1; ev.push({ type: 'pump' }); }
     G.thrPrev = thr;
     if (pumpIn > 0) { G.legs -= 0.18 * pumpIn * dt; G.legsRest = 0; }
     else { G.legsRest += dt; if (G.legsRest > 0.5) G.legs += 0.16 * dt; }
     G.legs = clamp(G.legs, 0, 1);
     if (G.legs <= 0 && !G.tired) { G.tired = true; ev.push({ type: 'flash', text: 'Legs gone: cruise to recover', cls: 'red' }); }
     if (G.tired && G.legs > 0.35) G.tired = false;
-    G.pump = pumpIn; G.stall = Math.max(0, -thr);
-    G.boost *= Math.exp(-dt * 2.2);
+    // weight shifts take a moment: pump and stall ease in and out instead of switching
+    G.pumpF += (pumpIn - G.pumpF) * (1 - Math.exp(-dt * 4));
+    G.stallF += (Math.max(0, -thr) - G.stallF) * (1 - Math.exp(-dt * 4));
+    G.pump = G.pumpF; G.stall = G.stallF;
+    G.boost *= Math.exp(-dt * 1.5);
+    G.steerF += (steer - G.steerF) * (1 - Math.exp(-dt * 7));
 
     if (G.state === 'riding') {
-      // carving: steer sets the turn rate and the board has a little weight, so it rolls into the turn.
+      // carving: steer sets the turn rate, but the board has angular inertia, so the turn builds up and
+      // unwinds smoothly; the faster you go the wider the arc (a lateral-grip limit, like a real rail).
       // It turns all the way round: cut back toward the curl, then come round again.
-      const turnRate = 2.5 * (1 - 0.3 * sstep(12, 30, vn));   // rad/s, stiffer at speed
-      G.omega += (steer * turnRate - G.omega) * (1 - Math.exp(-dt * 8));
-      G.theta += G.omega * dt;
-      // let go and the board settles back to trim along whichever way it is heading
+      const st = G.steerF;
+      const omegaMax = clamp(45 / Math.max(G.v, 1), 0.8, 1.8);           // rad/s
       const trim = Math.cos(G.theta) >= 0 ? 0 : Math.PI;
-      let err = wrap(G.theta - trim);
-      if (steer === 0) err *= Math.exp(-dt * 0.9);
-      if (G.h <= 0 && Math.sin(G.theta) < 0) err *= Math.exp(-dt * 4);  // nowhere lower to go: the bottom turn starts itself
-      G.theta = wrap(trim + err);
-      G.carve = steer;
+      const err = wrap(G.theta - trim);
+      const sinNow = Math.sin(G.theta);
+      // soft limits: in the trough the bottom turn starts itself, at the crest (or under the lip) the board is turned back down
+      const atFloor = G.h <= 0.005 && sinNow < -0.05;
+      const atCeil = G.h >= CEIL - 0.01 && sinNow > 0.05;
+      let omegaWant = st * omegaMax;
+      if (Math.abs(st) < 0.05) omegaWant = -0.9 * err;                    // let go: settle back to trim
+      if (atFloor || atCeil) omegaWant = -2.2 * err;
+      G.omega += (omegaWant - G.omega) * (1 - Math.exp(-dt * 4));
+      G.theta = wrap(G.theta + G.omega * dt);
+      G.carve = st;
       facePoint(G.h, G.z, G.t, fp);
       const sinT = Math.sin(G.theta), cosT = Math.cos(G.theta);
       // direction of travel in the tangent plane
@@ -1005,12 +1022,15 @@ void main() {
       const churn = 4.5 * sstep(1.0, 1.3, phi);
       const gravity = -9.8 * dy;
       // pumping: a strong shove that works best on a steep face and fades out near top speed; stalling digs the tail in
-      const pumpA = pumpIn * (6 + 4 * sstep(0.3, 0.9, steep)) * fade;
-      const stallA = G.stall * (3 + 0.12 * G.v);
-      const kickNow = G.kick * (1 - Math.exp(-dt * 10)); G.kick -= kickNow;
+      const pumpA = G.pumpF * (5 + 4 * sstep(0.3, 0.9, steep)) * fade;
+      const stallA = G.stall * (3 + 0.1 * G.v);
+      // each pump press is a half-sine surge of acceleration: it builds, peaks and fades, adding KICK in total
+      let kickNow = 0;
+      for (const k of G.kicks) { k.t += dt; kickNow += k.a * (Math.PI / (2 * KICK_T)) * Math.sin(Math.PI * Math.min(k.t, KICK_T) / KICK_T) * dt; }
+      G.kicks = G.kicks.filter((k) => k.t < KICK_T);
       const dv = push + spit - churn + pumpA - stallA - DRAG * G.v + gravity - (0.12 / SV) * G.v * sinT * sinT - (0.03 / SV) * G.v * Math.abs(G.omega);
       G.v = Math.max(0, G.v + dv * dt + kickNow);
-      G.boost = Math.min(1, G.boost + kickNow / (2 * SV) + 0.8 * pumpIn * dt);
+      G.boost = Math.min(1, G.boost + kickNow / (3 * SV) + 0.6 * G.pumpF * dt);
       G.topSpeed = Math.max(G.topSpeed, G.v);
       const Lface = 1.68 * fp.H;
       let dh = G.v * sinT / Lface;
@@ -1044,27 +1064,24 @@ void main() {
       }
       G.score += vn * Math.abs(cosT) * dt;
 
-      if (lam > 0.3 && G.h > 0.94) {
-        // under the curl: riding high scrapes the ceiling and scrubs speed; only launching up into the lip gets you pitched
-        if (G.v * sinT > 13 * SV || G.v < 3 * SV) return wipeout(G, ev, 'Pitched over the falls');
-        if (!G.scraping) ev.push({ type: 'flash', text: 'Scraping the lip: drop down', cls: 'amber' });
-        G.scraping = true;
-        G.h = 0.94; G.v *= Math.max(0, 1 - dt * 0.6 / SV);
-        if (sinT > 0.1) { G.theta = cosT >= 0 ? 0.1 : Math.PI - 0.1; G.omega = 0; }
-      } else {
-        G.scraping = false;
-      }
-      if (G.h >= 1.0 && !(lam > 0.3)) {
-        if (G.v > 9.5 * SV) { launchAir(G, dx, dy, dz); ev.push({ type: 'air' }); return ev; }
-        return wipeout(G, ev, 'Drifted over the back and lost the wave');
-      }
+      // the top of the face: under a throwing lip you scrape the ceiling and scrub speed; on an unbroken
+      // crest you either launch (fast and climbing hard) or the crest rolls you back down. Neither ends the ride.
+      if (G.h > CEIL) {
+        if (lam <= 0.3 && sinT > 0.45 && G.v > 11 * SV) { launchAir(G, dx, dy, dz); ev.push({ type: 'air' }); return ev; }
+        G.h = CEIL;
+        G.v *= Math.max(0, 1 - dt * 0.35 / SV);
+        if (lam > 0.3) {
+          if (!G.scraping) ev.push({ type: 'flash', text: 'Scraping the lip: drop down', cls: 'amber' });
+          G.scraping = true;
+        } else if (!G.ceilWarned) { G.ceilWarned = true; ev.push({ type: 'flash', text: 'Top of the wave', cls: 'amber' }); }
+      } else if (G.h < CEIL - 0.04) { G.scraping = false; G.ceilWarned = false; }
       if (G.h < 0) G.h = 0;
+      // too slow in the flats the wave just picks you back up (the lift above), it never strands you
       if (phi > 1.45) return wipeout(G, ev, 'Closed out: the tube collapsed on you');
       // the lip lands in the trough: you get a warning first, then it lands on you if you are still down there
       if (G.h < 0.2 && phi > 0.7 && phi < 1.2 && lam > 0.85 && !G.lipWarned) { G.lipWarned = true; ev.push({ type: 'flash', text: 'Lip’s landing: climb!', cls: 'red' }); }
       if (G.h > 0.3 || phi < 0.6) G.lipWarned = false;
       if (G.h < 0.08 && phi > 0.88 && phi < 1.25 && lam > 0.95) return wipeout(G, ev, 'The lip landed on you');
-      if (G.h < 0.04 && G.v < 3.5 * SV) return wipeout(G, ev, 'Bogged down in the flats');
 
       G.pos.x = fp.x; G.pos.y = fp.y; G.pos.z = fp.z;
       G.nrm.x = fp.nx; G.nrm.y = fp.ny; G.nrm.z = fp.nz;
@@ -1080,14 +1097,14 @@ void main() {
       const hL = faceHAtX(G.pos.x, G.z, G.t);
       facePoint(hL, G.z, G.t, sp);
       G.H = sp.H; G.phi = sp.phi; G.lam = sp.lam;
-      if (G.airT > 0.15 && G.pos.y <= sp.y + 0.05) {
-        if (G.pos.x < sp.x - 0.5 * S || hL >= 0.999) return wipeout(G, ev, 'Flew over the back and lost the wave');
-        G.h = hL; G.state = 'riding'; G.theta = G.vel.z < 0 ? Math.PI : 0; G.omega = 0; G.airs++;
+      // land wherever you come down on the face (over the back, you are set down just below the crest)
+      if ((G.airT > 0.15 && G.pos.y <= sp.y + 0.05) || G.airT > 6) {
+        G.h = Math.min(hL, CEIL - 0.08); G.state = 'riding'; G.theta = G.vel.z < 0 ? Math.PI - 0.15 : -0.15; G.omega = 0; G.airs++;
         G.v = Math.max(6 * SV, Math.hypot(G.vel.x, G.vel.z) * 0.8);
         G.score += 150; ev.push({ type: 'flash', text: 'Air +150', cls: 'amber' }); ev.push({ type: 'landed' });
         G.nrm.x = sp.nx; G.nrm.y = sp.ny; G.nrm.z = sp.nz; G.fwd.x = 0; G.fwd.y = 0; G.fwd.z = G.vel.z < 0 ? -1 : 1;
-      } else if (G.airT > 4 * SV) {
-        return wipeout(G, ev, 'Lost the wave');
+      } else if (G.pos.x < sp.x - 2) {
+        G.vel.x += 6 * dt;   // drifting behind the crest: the updraft off the face pushes you back over it
       }
     } else if (G.state === 'wipeout') {
       G.wipeT += dt;
@@ -1665,8 +1682,10 @@ void main() {
   const cam = { shot: 'chase', shotT: 0, nextCut: 8, rot: 0, init: false, cut: false, roll: 0, t: 0, fov: 66, flyP: new THREE.Vector3(), outOfTube: 0, dir: 1 };
   const SHOT_LEN = { heli: 5.5, trough: 4.5, flyby: 6, tube: 99 };
   const CINE = { heli: 1, trough: 1, flyby: 1, wipe: 1 };
-  const camPos = new THREE.Vector3(), camTgt = new THREE.Vector3(), camWantP = new THREE.Vector3(), camWantT = new THREE.Vector3(), camUp = new THREE.Vector3(0, 1, 0);
-  const cp = {}, cq = {};
+  const camPos = new THREE.Vector3(), camTgt = new THREE.Vector3(), camWantP = new THREE.Vector3(), camWantT = new THREE.Vector3();
+  const cp = {}, cq = {}, ca = {};
+  const upWant = new THREE.Vector3(0, 1, 0), upCur = new THREE.Vector3(0, 1, 0);
+  const tmpUp = new THREE.Vector3(), lookFwd = new THREE.Vector3(), camFwd = new THREE.Vector3(0, 0, 1), fwdWant = new THREE.Vector3(), nrmV = new THREE.Vector3();
   function setShot(s) {
     if (cam.shot === s) return;
     cam.shot = s; cam.shotT = 0; cam.cut = true;
@@ -1676,7 +1695,7 @@ void main() {
       facePoint(clamp(G.h + 0.04, 0.05, 0.8), G.z + lead, G.t, cp);
       cam.flyP.set(cp.x + cp.nx * 9, cp.y + cp.ny * 9 + 2.5, cp.z + cp.nz * 9);
     }
-    if (s === 'chase') cam.nextCut = 7 + Math.random() * 4;
+    if (s === 'chase') cam.nextCut = (window.innerHeight > window.innerWidth ? 11 : 7) + Math.random() * 4;
     updateCamLabel();
   }
   function direct(dt) {
@@ -1692,7 +1711,8 @@ void main() {
     // danger: give the player the playable view
     if (G.phi > 0.9 || G.scraping || G.h < 0.05) { if (s !== 'chase' && cam.shotT > 1.2) setShot('chase'); return; }
     if (s === 'chase') {
-      if (cam.shotT > cam.nextCut) setShot(['heli', 'flyby', 'trough'][cam.rot++ % 3]);
+      // portrait: the wide shots shrink the surfer to a speck on a narrow screen, so only the fly-by cuts in
+      if (cam.shotT > cam.nextCut) setShot(window.innerHeight > window.innerWidth ? 'flyby' : ['heli', 'flyby', 'trough'][cam.rot++ % 3]);
     } else if (s === 'flyby') {
       if (G.z > cam.flyP.z + 35 || cam.shotT > SHOT_LEN.flyby) setShot('chase');
     } else if (cam.shotT > (SHOT_LEN[s] || 5)) setShot('chase');
@@ -1726,6 +1746,7 @@ void main() {
     cam.dir += (dirWant - cam.dir) * (1 - Math.exp(-dt * 2.2));
     const lipK = sstep(0.1, 0.5, G.lam || 0);
     let fov = 66, kP = 4.5, kT = 6, rollK = 0, shakeK = 0.3;
+    upWant.set(0, 1, 0);
 
     if (shot === 'wipe' || shot === 'channel') {
       // channel view: low in the flat water well down the line, looking back along the wall into the tube and the lip landing
@@ -1761,6 +1782,27 @@ void main() {
       camWantP.set(cp.x + cp.nx * 3.2, cp.y + cp.ny * 3.2 + 1.2, cp.z + cp.nz * 3.2);
       camWantT.set(G.pos.x + 5, G.pos.y + 2.5, G.pos.z + 45);
       fov = portrait ? 100 : 88; kP = 6; kT = 6; rollK = 1; shakeK = 1.2;
+    } else if (portrait) {
+      // portrait chase / close: a third-person camera that rides behind the board along its (smoothed) heading,
+      // with its "up" leaned toward the face so the face reads as the ground. Where you are going is up the
+      // screen and the left / right buttons turn the board left / right on screen; climb and you look up at the lip.
+      const close = shot === 'close';
+      fwdWant.set(G.fwd.x, G.fwd.y, G.fwd.z);
+      if (G.state !== 'riding' || fwdWant.lengthSq() < 0.5) fwdWant.set(0, 0, Math.sign(G.vel.z || 1));
+      camFwd.lerp(fwdWant, 1 - Math.exp(-dt * 2.6)).normalize();
+      nrmV.set(G.nrm.x, G.nrm.y, G.nrm.z);
+      let back = (close ? 11 : 16) + 9 * vk;
+      if (G.inBarrel) back = Math.min(back, 12);
+      const off = (close ? 4.5 : 6.5) + 3.5 * vk;
+      const ahead = (close ? 20 : 30) + 0.35 * v;
+      // pitch is flattened, so heading straight down the face still shows the horizon instead of a screen of water
+      lookFwd.set(camFwd.x, camFwd.y * 0.35, camFwd.z).normalize();
+      camWantP.copy(surfer.root.position).addScaledVector(lookFwd, -back).addScaledVector(nrmV, off);
+      camWantP.y = Math.max(camWantP.y + 1.5, surfer.root.position.y + 3);
+      camWantT.copy(surfer.root.position).addScaledVector(lookFwd, 0.7 * ahead).addScaledVector(nrmV, 2.5);
+      upWant.copy(nrmV).multiplyScalar(0.55).add(tmpUp.set(0, 0.45, 0)).normalize();
+      fov = 72 + 10 * vk + 4 * lipK + 6 * (G.boost || 0);
+      kP = 5; kT = 5; rollK = 0.6; shakeK = 0.7;
     } else {
       // chase / close: pulls back and widens with speed; tilts up to keep the lip and the height of the wall in frame
       const close = shot === 'close';
@@ -1781,17 +1823,19 @@ void main() {
       // capped: on a 500 m wall, tilting up to the lip would push the surfer out of the bottom of the frame
       const tilt = (close ? 1.5 : 3) + Math.min(Hn * (0.03 + 0.05 * lipK), 6 + 8 * lipK);
       camWantT.set(G.pos.x - 1.0, G.pos.y + 1.4 + tilt, G.pos.z + ahead);
-      fov = (portrait ? 84 : 66) + 16 * vk + 8 * lipK + (close ? 6 : 0) + 14 * (G.boost || 0);
+      fov = 66 + 14 * vk + 8 * lipK + (close ? 6 : 0) + 8 * (G.boost || 0);
       rollK = 1; shakeK = 1;
     }
 
-    if (!cam.init || cam.cut) { camPos.copy(camWantP); camTgt.copy(camWantT); cam.init = true; cam.cut = false; cam.fov = fov; }
+    if (G.state !== 'riding') upWant.set(0, 1, 0);
+    if (!cam.init || cam.cut) { camPos.copy(camWantP); camTgt.copy(camWantT); upCur.copy(upWant); cam.init = true; cam.cut = false; cam.fov = fov; }
+    upCur.lerp(upWant, 1 - Math.exp(-dt * 2)).normalize();
     camPos.lerp(camWantP, 1 - Math.exp(-dt * kP)); camTgt.lerp(camWantT, 1 - Math.exp(-dt * kT));
     // never under the water
     surfacePoint(0.1, camPos.z, G.t, cq);
     if (camPos.x > cq.x - 5 && camPos.y < 1.5) camPos.y = 1.5;
     camera.position.copy(camPos);
-    camera.up.copy(camUp);
+    camera.up.copy(upCur);
     camera.lookAt(camTgt);
     cam.roll += ((-(G.carve || 0) * 0.07 * rollK) - cam.roll) * (1 - Math.exp(-dt * 3));
     camera.rotateZ(cam.roll);
@@ -2001,18 +2045,18 @@ void main() {
     UI.thr = d < -0.5 * W.LT ? 1 : d > 40 * S ? -0.5 : 0;
   }
   let last = performance.now();
-  let acc = 0;
   const FIXED = 1 / 120;
   function frame(now) {
     let dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (paused) dt = 0;
     if (G.mode === 'play') readInput(); else autopilot();
     const slow = (G.state === 'wipeout' && G.wipeT < 1.4) ? 0.42 : 1;
-    acc += dt * slow;
-    let steps = 0;
-    while (acc >= FIXED && steps < 12) {
-      if (G.mode !== 'over') handleEvents(SP.step(G, FIXED, UI.steer, UI.thr));
-      acc -= FIXED; steps++;
+    // step the physics by exactly this frame's time, in equal substeps no longer than FIXED:
+    // a fixed-step accumulator lands 1 step on one frame and 3 on the next, which judders at 150+ km/h
+    const simDt = dt * slow;
+    const n = Math.ceil(simDt / FIXED - 1e-6);
+    for (let i = 0; i < n; i++) {
+      if (G.mode !== 'over') handleEvents(SP.step(G, simDt / n, UI.steer, UI.thr));
     }
     placeSurfer(dt * slow);
     waveSpray(dt * slow);
