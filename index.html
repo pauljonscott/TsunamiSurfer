@@ -37,6 +37,17 @@
   }
   canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
   button { font: inherit; color: inherit; }
+  /* speed lines: a radial streak field that fades in as the board passes ~110 km/h */
+  #speedfx {
+    position: fixed; inset: -12%; pointer-events: none; opacity: 0;
+    background: repeating-conic-gradient(from 0deg at 50% 50%, rgba(234,246,243,0) 0deg 2.1deg, rgba(234,246,243,0.5) 2.3deg 2.5deg, rgba(234,246,243,0) 2.7deg 4.6deg);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 50%, transparent 36%, #000 80%);
+    mask-image: radial-gradient(ellipse at 50% 50%, transparent 36%, #000 80%);
+  }
+  /* letterbox bars for the cinematic shots of the camera director */
+  .lb { position: fixed; left: 0; right: 0; height: 0; background: #000; pointer-events: none; transition: height 0.45s ease; }
+  #lb-t { top: 0; } #lb-b { bottom: 0; }
+  @media (orientation: landscape) { body.cine .lb { height: 6vh; } }
   /* ---------- HUD ---------- */
   #hud { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.4s; padding: calc(env(safe-area-inset-top, 0px) + 12px) calc(env(safe-area-inset-right, 0px) + 14px) calc(env(safe-area-inset-bottom, 0px) + 12px) calc(env(safe-area-inset-left, 0px) + 14px); }
   #hud.on { opacity: 1; }
@@ -49,11 +60,27 @@
   #st-speed { right: calc(env(safe-area-inset-right, 0px) + 14px); top: calc(env(safe-area-inset-top, 0px) + 84px); text-align: right; }
   #st-speed .num { font-size: clamp(22px, 4.2vmin, 34px); }
   #st-speed .num span { font-size: 0.55em; font-weight: 500; margin-left: 2px; }
+  #st-speed.fast .num { color: var(--amber); }
   #st-dist { left: calc(env(safe-area-inset-left, 0px) + 14px); top: calc(env(safe-area-inset-top, 0px) + 84px); }
   #st-dist .num { font-size: clamp(22px, 4.2vmin, 34px); }
   #st-dist .num span { font-size: 0.55em; font-weight: 500; margin-left: 2px; }
+  /* pump stamina */
+  #legs { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 14px); top: calc(env(safe-area-inset-top, 0px) + 148px); width: clamp(90px, 18vmin, 140px); text-align: right; text-shadow: var(--shadow); }
+  #legs .bar { height: 6px; border-radius: 3px; background: rgba(234,246,243,0.18); overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+  #legs-fill { height: 100%; width: 100%; background: var(--teal); border-radius: 3px; }
+  #legs.tired #legs-fill { background: var(--red); }
+  #legs.pump #legs-fill { background: var(--amber); }
+  #legs .lbl { font-size: clamp(12px, 2.2vmin, 15px); color: var(--foam-dim); margin-top: 4px; }
+  /* altitude on the face: the column is the wave, the dot is you */
+  #facegauge { position: absolute; left: calc(env(safe-area-inset-left, 0px) + 18px); top: 50%; transform: translateY(-40%); display: flex; align-items: stretch; gap: 8px; text-shadow: var(--shadow); }
+  #facegauge .col { position: relative; width: 6px; height: min(30vh, 220px); border-radius: 3px; background: linear-gradient(0deg, rgba(94,224,199,0.25), rgba(234,246,243,0.55)); box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+  #fg-you { position: absolute; left: 50%; bottom: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--foam); border: 2px solid var(--ink); transform: translate(-50%, 50%); }
+  #facegauge .txt { display: flex; flex-direction: column; justify-content: space-between; font-size: clamp(12px, 2.2vmin, 15px); color: var(--foam-dim); line-height: 1.1; }
+  #facegauge .txt b { color: var(--foam); font-weight: 700; font-size: 1.25em; }
   /* the line gauge: caught on the left, pocket in the middle, shoulder on the right */
   #gauge { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); transform: translateX(-50%); width: min(62vw, 420px); }
+  body.touch #gauge { width: min(36vw, 420px); }
+  @media (max-width: 640px) { body.touch #gauge .lbls span:nth-child(2) { display: none; } }
   #gauge .bar { position: relative; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--red) 0%, var(--red) 6%, var(--teal) 11%, var(--teal) 44%, rgba(234,246,243,0.35) 52%, rgba(234,246,243,0.18) 100%); box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
   #marker { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border-radius: 50%; background: var(--foam); border: 2px solid var(--ink); transform: translate(-50%, -50%); transition: left 0.1s linear; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
   #gauge .lbls { display: flex; justify-content: space-between; font-size: clamp(12px, 2.2vmin, 15px); color: var(--foam-dim); margin-top: 6px; text-shadow: var(--shadow); }
@@ -66,13 +93,20 @@
   .flash.red { color: var(--red); }
   #hint { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 160px); transform: translateX(-50%); font-size: clamp(16px, 3vmin, 22px); color: var(--foam); text-shadow: var(--shadow); text-align: center; opacity: 0; transition: opacity 0.4s; max-width: 86vw; }
   #hint.on { opacity: 1; }
-  /* touch steering buttons */
+  /* tag that finds the surfer in the wide shots */
+  #tag { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); font-size: clamp(13px, 2.4vmin, 16px); font-weight: 700; color: var(--amber); text-shadow: var(--shadow); text-align: center; line-height: 1; display: none; white-space: nowrap; }
+  #tag.on { display: block; }
+  /* touch buttons */
   .steer { display: none; position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); width: 92px; height: 92px; border-radius: 50%; border: 2px solid var(--glass-edge); background: var(--glass); color: var(--foam); font-size: 40px; line-height: 1; align-items: center; justify-content: center; touch-action: none; pointer-events: auto; opacity: 0.8; }
+  .steer.small { width: 70px; height: 70px; font-size: 28px; bottom: calc(env(safe-area-inset-bottom, 0px) + 124px); }
   .steer.held { background: rgba(94, 224, 199, 0.45); opacity: 1; }
   body.touch .steer { display: flex; }
   #btn-l { left: calc(env(safe-area-inset-left, 0px) + 16px); }
   #btn-r { right: calc(env(safe-area-inset-right, 0px) + 16px); }
+  #btn-stall { left: calc(env(safe-area-inset-left, 0px) + 27px); }
+  #btn-pump { right: calc(env(safe-area-inset-right, 0px) + 27px); }
   .steer small { font-size: 12px; position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; color: var(--foam-dim); }
+  .steer.small small { bottom: 5px; font-size: 11px; }
   /* ---------- overlays ---------- */
   .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px); background: linear-gradient(180deg, rgba(6,32,44,0.15), rgba(6,32,44,0.55)); }
   .overlay.on { display: flex; }
@@ -87,41 +121,53 @@
   .primary:focus-visible, .ghost:focus-visible, .steer:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
   .ghost { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--glass-edge); background: rgba(234,246,243,0.08); font-size: clamp(15px, 2.6vmin, 18px); cursor: pointer; }
   #best { margin-left: auto; color: var(--amber); font-size: clamp(16px, 3vmin, 20px); }
-  #cam-hud { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); transform: translateX(-50%); pointer-events: auto; padding: 7px 12px; font-size: clamp(13px, 2.4vmin, 16px); opacity: 0.75; touch-action: manipulation; }
+  #cam-hud { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); transform: translateX(-50%); pointer-events: auto; padding: 7px 12px; font-size: clamp(13px, 2.4vmin, 16px); opacity: 0.75; touch-action: manipulation; white-space: nowrap; }
   #cam-hud:hover { opacity: 1; }
   #pause { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(6,32,44,0.45); font-size: clamp(36px, 8vmin, 64px); font-weight: 700; text-shadow: var(--shadow); cursor: pointer; }
   #pause.on { display: flex; }
   #pause small { display: block; font-size: 0.4em; font-weight: 500; color: var(--foam-dim); text-align: center; }
-  @media (prefers-reduced-motion: reduce) { .flash, #hud, #hint, #marker { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .flash, #hud, #hint, #marker, .lb { transition: none; } #speedfx { display: none; } }
   @media (max-height: 480px) and (orientation: landscape) {
     .panel { padding: 14px 20px; }
     h1 { font-size: 46px; }
     .panel p { margin-top: 6px; font-size: 16px; }
     #st-speed, #st-dist { display: none; }
+    #legs { top: calc(env(safe-area-inset-top, 0px) + 84px); }
+    #facegauge .col { height: 26vh; }
+    .steer.small { bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); }
+    #btn-stall { left: calc(env(safe-area-inset-left, 0px) + 118px); }
+    #btn-pump { right: calc(env(safe-area-inset-right, 0px) + 118px); }
   }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="speedfx"></div>
+<div class="lb" id="lb-t"></div><div class="lb" id="lb-b"></div>
 
 <div id="hud">
   <div class="stat" id="st-score"><div class="num" id="score">0</div><div class="lbl">points</div></div>
   <div class="stat" id="st-dist"><div class="num"><span id="dist">0</span><span>m</span></div><div class="lbl">down the line</div></div>
-  <div class="stat" id="st-wave"><div class="num"><span id="height">24</span><span>m</span></div><div class="lbl">wave face</div></div>
+  <div class="stat" id="st-wave"><div class="num"><span id="height">144</span><span>m</span></div><div class="lbl">wave face</div></div>
   <div class="stat" id="st-speed"><div class="num"><span id="speed">0</span><span>km/h</span></div><div class="lbl">speed</div></div>
+  <div id="legs"><div class="bar"><div id="legs-fill"></div></div><div class="lbl" id="legs-lbl">legs</div></div>
+  <div id="facegauge"><div class="col"><div id="fg-you"></div></div><div class="txt"><span>crest <b id="fg-crest">0</b> m</span><span>you <b id="fg-you-m">0</b> m</span></div></div>
+  <div id="tag">you<br>▼</div>
   <div id="barrel-t"></div>
   <div id="gauge"><div class="bar"><div id="marker"></div></div><div class="lbls"><span>caught</span><span>tube and pocket</span><span>shoulder</span></div></div>
   <div class="flash" id="flash"></div>
   <div id="hint"></div>
-  <button class="ghost" id="cam-hud">Camera: chase</button>
+  <button class="ghost" id="cam-hud">Camera: auto</button>
 </div>
-<button class="steer" id="btn-l" aria-label="Drop down the face">◀<small>drop</small></button>
-<button class="steer" id="btn-r" aria-label="Climb the wave">▶<small>climb</small></button>
+<button class="steer" id="btn-l" aria-label="Carve down the face">◀<small>drop</small></button>
+<button class="steer" id="btn-r" aria-label="Carve up the wave">▶<small>climb</small></button>
+<button class="steer small" id="btn-stall" aria-label="Stall to slow down">▼<small>stall</small></button>
+<button class="steer small" id="btn-pump" aria-label="Pump to speed up">▲<small>pump</small></button>
 
 <div class="overlay on" id="title">
   <div class="panel">
     <h1>Tsunami Surf</h1>
-    <p>A wall of water the size of an office block is peeling down the line. Stay in the pocket, duck under the lip for the barrel, and don’t get caught when it closes out.</p>
+    <p>A wall of water taller than a skyscraper is peeling down the line. Carve your line, pump for speed or stall to let the lip catch you, and don’t get caught when it closes out.</p>
     <p class="dim" id="ctrl-desc"></p>
     <div class="row">
       <button class="primary" id="start">Paddle in</button>
@@ -140,7 +186,7 @@
     <p class="dim" id="over-stats"></p>
     <div class="row">
       <button class="primary" id="again">Ride again</button>
-      <button class="ghost" id="cam">Camera: chase</button>
+      <button class="ghost" id="cam">Camera: auto</button>
     </div>
   </div>
 </div>
@@ -149,7 +195,456 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform float uZBreak;\nuniform float uLT;\nuniform float uLF;\nuniform float uLS;\nuniform float uDF;\nuniform float uDB;\nuniform float uZCenter;\n\nvarying vec3 vWorld;\nvarying vec3 vNormal;\nvarying vec3 vTangent;\nvarying float vFoam;\nvarying float vThin;\nvarying float vAO;\nvarying float vArc;\nvarying float vHf;\nvarying float vFog;\n\nconst float DEG = 0.017453292519943295;\nconst float PI = 3.14159265358979;\n\nfloat sstep(float e0, float e1, float x) { float t = clamp((x - e0) / (e1 - e0), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }\n\nstruct WP {\n  float H; float phi; float lam; float kappa; float gT; float gJ; float vj; float tauLand; float tauTip;\n  float d0; float w; float Xface; float Xback; float mA; float mX; float mW; float xShift;\n};\n\nWP waveParams(float z) {\n  WP p;\n  float d = z - uZBreak;\n  float phi = -d / uLT;\n  float lamF = 0.06 * sstep(-0.8, 0.0, phi);\n  float lam = mix(lamF, 1.0, clamp(phi, 0.0, 1.0));\n  float kappa = sstep(1.0, 2.0, phi);\n  float sh = sstep(uLF, uLF + uLS, d);\n  float taper = mix(1.0, 0.72, sh) * mix(1.0, 0.6, sstep(uLF + uLS, uLF + uLS + 450.0, d));\n  float H = uH * taper * (1.0 + 0.04 * sin(z * 0.021 + 1.3) + 0.03 * sin(z * 0.053)) * (1.0 - 0.35 * kappa);\n  float gT = mix(72.0, 92.0, sstep(0.0, uLF, d));\n  gT = mix(gT, 108.0, sh);\n  gT = mix(gT, 112.0, kappa);\n  gT *= DEG;\n  float fold = mix(8.0, 32.0, lam) * DEG;\n  float gJ = gT - fold;\n  float gS = clamp(gJ, 30.0 * DEG, 75.0 * DEG);\n  float d0 = H * mix(mix(0.30, 0.16, lam), 0.42, kappa);\n  float cg = cos(gS); float sg = sin(gS);\n  float yT = 0.95; float xLand = 1.05; float yLand = 0.10;\n  float vj0 = sqrt(xLand * xLand / (2.0 * cg * cg * (yT + xLand * sg / cg - yLand)));\n  float tauLand = xLand / (vj0 * cg);\n  p.H = H; p.phi = phi; p.lam = lam; p.kappa = kappa; p.gT = gT; p.gJ = gJ;\n  p.vj = vj0 * (1.0 - 0.3 * kappa);\n  p.tauLand = tauLand;\n  float rag = 1.0 + 0.07 * sin(z * 0.21 + 0.6 * uTime) + 0.04 * sin(z * 0.57 - 0.9 * uTime);\n  p.tauTip = tauLand * lam * rag * (1.0 - 0.85 * sstep(0.25, 1.0, kappa));\n  p.d0 = d0;\n  p.w = sstep(0.0, 0.25, lam) * (1.0 - kappa);\n  p.Xface = 1.2 * H;\n  p.Xback = 2.2 * H;\n  p.mA = H * (0.10 * sstep(0.55, 0.95, phi) + 0.30 * sstep(1.0, 1.7, phi));\n  p.mX = p.Xface * 0.85 + H * 1.2 * sstep(1.2, 3.5, phi);\n  p.mW = H * (0.45 + 0.9 * sstep(1.0, 3.0, phi));\n  p.xShift = 3.0 * sin(z * 0.011) + 1.5 * sin(z * 0.037 + 2.0);\n  return p;\n}\n\nfloat swell(float x, float z, float t, float H) {\n  float a = H / 26.0;\n  return a * (0.6 * sin(0.03 * x + 0.7 * t) + 0.3 * sin(0.07 * x - 0.02 * z + 1.3 * t) + 0.2 * sin(0.11 * z + 0.05 * x + 0.9 * t));\n}\n\nvec2 hermite(vec2 p0, vec2 m0, vec2 p1, vec2 m1, float v) {\n  float v2 = v * v; float v3 = v2 * v;\n  float h00 = 2.0 * v3 - 3.0 * v2 + 1.0; float h10 = v3 - 2.0 * v2 + v; float h01 = -2.0 * v3 + 3.0 * v2; float h11 = v3 - v2;\n  return h00 * p0 + h10 * m0 + h01 * p1 + h11 * m1;\n}\n\nvec2 jetPos(float tau, vec2 C0, float cj, float sj, float vj, float H) {\n  return C0 + H * vec2(vj * cj * tau, vj * sj * tau - 0.5 * tau * tau);\n}\nvec2 jetTan(float tau, float cj, float sj, float vj) {\n  return normalize(vec2(vj * cj, vj * sj - tau));\n}\n\n// Cross-section point; aux = (foam, thin, ao, arc)\nvec2 profile(float s, float z, float t, WP p, out vec4 aux) {\n  float H = p.H; float Xface = p.Xface;\n  float x = 0.0; float y = 0.0; float foam = 0.0; float thin = 0.0; float ao = 1.0; float arc = 0.0;\n  vec2 T = vec2(0.0, 0.95 * H);\n  float cj = cos(p.gJ); float sj = sin(p.gJ);\n  vec2 nR = vec2(sj, -cj);\n  vec2 C0 = T - 0.5 * p.d0 * nR;\n  vec2 top = T - p.d0 * nR;\n  float Lface = 1.68 * H;\n  if (s < 0.14) {\n    float u = s / 0.14; float w = (1.0 - u) * (1.0 - u);\n    x = Xface + uDF * w; y = 0.0;\n    arc = -(x - Xface);\n    y += sstep(0.0, 60.0, x - Xface) * swell(x, z, t, H);\n  } else if (s < 0.46) {\n    float v = (s - 0.14) / 0.32;\n    float m1 = 1.3 * T.y;\n    vec2 q = hermite(vec2(Xface, 0.0), vec2(-1.4 * Xface, 0.0), T, m1 * vec2(cos(p.gT), sin(p.gT)), v);\n    x = q.x; y = q.y;\n    arc = v * Lface;\n    thin = sstep(0.55, 1.0, v) * mix(0.25, 0.6, p.lam);\n    ao = 1.0 - 0.55 * p.lam * sstep(0.5, 1.0, v);\n  } else if (s < 0.74) {\n    float lx = 0.0; float ly = 0.0; float lfoam = 0.0; float lthin = 1.0; float lao = 1.0; float larc = Lface;\n    float tauTip = p.tauTip;\n    float feather = sstep(-1.2, -0.1, p.phi) * (1.0 - sstep(0.5, 1.5, p.phi));\n    if (s < 0.58) {\n      float u = (s - 0.46) / 0.12; float tau = u * tauTip;\n      vec2 J = jetPos(tau, C0, cj, sj, p.vj, H); vec2 tg = jetTan(tau, cj, sj, p.vj);\n      float th = p.d0 * (1.0 - 0.5 * tau / p.tauLand);\n      lx = J.x + 0.5 * th * tg.y; ly = J.y - 0.5 * th * tg.x;\n      larc = Lface + tau * p.vj * H;\n      lthin = 0.6 + 0.4 * u; lao = 1.0 - 0.65 * p.lam;\n      lfoam = p.lam * sstep(0.85, 1.0, u) * 0.35;\n    } else if (s < 0.62) {\n      float a = (s - 0.58) / 0.04 * PI; float tau = tauTip;\n      vec2 J = jetPos(tau, C0, cj, sj, p.vj, H); vec2 tg = jetTan(tau, cj, sj, p.vj);\n      float r = 0.5 * p.d0 * (1.0 - 0.5 * tau / p.tauLand);\n      float ca = cos(a); float sa = sin(a);\n      lx = J.x + r * (ca * tg.y + sa * tg.x); ly = J.y + r * (-ca * tg.x + sa * tg.y);\n      larc = Lface + tau * p.vj * H + r * a;\n      lthin = 1.0; lao = 1.0 - 0.65 * p.lam * (1.0 - a / PI);\n      lfoam = p.lam * (0.25 + 0.45 * sa) + 0.9 * feather;\n    } else {\n      float u = 1.0 - (s - 0.62) / 0.12; float tau = u * tauTip;\n      vec2 J = jetPos(tau, C0, cj, sj, p.vj, H); vec2 tg = jetTan(tau, cj, sj, p.vj);\n      float th = p.d0 * (1.0 - 0.5 * tau / p.tauLand);\n      lx = J.x - 0.5 * th * tg.y; ly = J.y + 0.5 * th * tg.x;\n      larc = Lface + tau * p.vj * H;\n      lthin = 0.9; lao = 1.0;\n      lfoam = p.lam * sstep(0.85, 1.0, u) * 0.3 + 0.4 * feather * (1.0 - u);\n    }\n    float u2 = (s - 0.46) / 0.28; float mag = 0.7 * p.d0;\n    float a1 = 230.0 * DEG;\n    vec2 cap = hermite(T, mag * vec2(cos(p.gT), sin(p.gT)), top, mag * vec2(cos(a1), sin(a1)), u2);\n    float w = p.w;\n    x = mix(cap.x, lx, w); y = mix(cap.y, ly, w);\n    foam = mix(0.9 * feather * sstep(0.2, 0.5, u2) * (1.0 - sstep(0.5, 0.8, u2)), lfoam, w);\n    thin = mix(0.35, lthin, w); ao = mix(1.0, lao, w);\n    arc = mix(Lface + u2 * 2.0 * p.d0, larc, w);\n  } else if (s < 0.86) {\n    float u = (s - 0.74) / 0.12;\n    float aF = mix(230.0 * DEG, p.gJ + PI, p.w);\n    vec2 q = hermite(top, H * vec2(cos(aF), sin(aF)), vec2(-p.Xback, 0.0), vec2(-1.5 * H, 0.0), u);\n    x = q.x; y = q.y;\n    arc = Lface + 2.0 * p.d0 + u * 2.6 * H;\n    thin = sstep(0.3, 0.0, u) * 0.3;\n    y += sstep(0.6, 1.0, u) * swell(x, z, t, H) * 0.5;\n  } else {\n    float u = (s - 0.86) / 0.14;\n    x = -p.Xback - uDB * u * u; y = 0.0;\n    arc = Lface + 2.0 * p.d0 + 2.6 * H + (-p.Xback - x);\n    y += mix(0.5, 1.0, sstep(0.0, 60.0, -p.Xback - x)) * swell(x, z, t, H);\n  }\n  if (s < 0.46) {\n    float q = (x - p.mX) / p.mW; float b = exp(-q * q);\n    y += p.mA * b;\n    foam = max(foam, b * clamp(p.mA / (0.06 * H), 0.0, 1.0));\n  }\n  if (s < 0.74) foam = max(foam, p.kappa * 0.95); else foam = max(foam, p.kappa * 0.3);\n  aux = vec4(foam, thin, ao, arc);\n  return vec2(x + p.xShift, y);\n}\n\n// dense (~1 m rows) at the surfer, stretching to +600 m ahead and -200 m behind\nfloat zMap(float u) { return u >= 0.0 ? 150.0 * u + 450.0 * u * u : -(150.0 * abs(u) + 50.0 * u * u); }\n\nvoid main() {\n  float s = position.x;\n  float zl = position.y;\n  float z = uZCenter + zMap(zl);\n  float ds = 0.0025;\n  float dz = 1.0;\n  WP p = waveParams(z);\n  vec4 aux;\n  vec2 c = profile(s, z, uTime, p, aux);\n  vec4 ax;\n  vec2 cs1 = profile(min(s + ds, 1.0), z, uTime, p, ax);\n  vec2 cs0 = profile(max(s - ds, 0.0), z, uTime, p, ax);\n  WP p1 = waveParams(z + dz);\n  vec2 cz1 = profile(s, z + dz, uTime, p1, ax);\n  WP p0 = waveParams(z - dz);\n  vec2 cz0 = profile(s, z - dz, uTime, p0, ax);\n  vec3 dPs = vec3(cs1.x - cs0.x, cs1.y - cs0.y, 0.0);\n  vec3 dPz = vec3(cz1.x - cz0.x, cz1.y - cz0.y, 2.0 * dz);\n  vec3 n = normalize(cross(dPs, dPz));\n  vec3 world = vec3(c.x, c.y, z);\n  vWorld = world;\n  vNormal = n;\n  vTangent = normalize(dPs);\n  vFoam = aux.x; vThin = aux.y; vAO = aux.z; vArc = aux.w;\n  vHf = clamp(c.y / max(p.H, 1.0), 0.0, 1.5);\n  vec4 mv = viewMatrix * vec4(world, 1.0);\n  vFog = -mv.z;\n  gl_Position = projectionMatrix * mv;\n}\n","waveFrag":"uniform float uTime;\nuniform float uFlow;\nuniform vec3 uSunDir;\nuniform vec3 uSunCol;\nuniform vec3 uSkyZenith;\nuniform vec3 uSkyHorizon;\nuniform vec3 uFogCol;\nuniform float uFogNear;\nuniform float uFogFar;\n\nvarying vec3 vWorld;\nvarying vec3 vNormal;\nvarying vec3 vTangent;\nvarying float vFoam;\nvarying float vThin;\nvarying float vAO;\nvarying float vArc;\nvarying float vHf;\nvarying float vFog;\n\nfloat hash(vec2 p) {\n  // lattice-wrapped, sine-free hash: stable on mobile GPUs and for large coordinates\n  p = mod(p, 256.0);\n  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nfloat vnoise(vec2 p) {\n  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);\n  float a = hash(i); float b = hash(i + vec2(1.0, 0.0)); float c = hash(i + vec2(0.0, 1.0)); float d = hash(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);\n}\nfloat fbm(vec2 p) {\n  float v = 0.0; float a = 0.5;\n  for (int i = 0; i < 4; i++) { v += a * vnoise(p); p = p * 2.03 + vec2(17.0, 9.0); a *= 0.5; }\n  return v;\n}\n\nvec3 skyColor(vec3 d) {\n  float h = clamp(d.y, 0.0, 1.0);\n  vec3 c = mix(uSkyHorizon, uSkyZenith, pow(h, 0.55));\n  float sd = max(dot(d, uSunDir), 0.0);\n  c += uSunCol * (pow(sd, 8.0) * 0.25 + pow(sd, 400.0) * 1.5);\n  return c;\n}\n\nvoid main() {\n  vec3 N = normalize(vNormal);\n  vec3 T = normalize(vTangent - N * dot(vTangent, N));\n  vec3 B = normalize(cross(N, T));\n  vec3 V = normalize(cameraPosition - vWorld);\n  vec3 L = uSunDir;\n\n  // flow coordinates: water travels up the face / through the wave at uFlow\n  vec2 uv = vec2(vArc - uFlow * uTime, vWorld.z);\n  float e = 0.35;\n  vec2 q = uv * 0.09;\n  float n0 = fbm(q);\n  float nx = fbm(q + vec2(e * 0.09, 0.0));\n  float ny = fbm(q + vec2(0.0, e * 0.09));\n  vec2 g = vec2(nx - n0, ny - n0) / (e * 0.09);\n  // finer ripples\n  vec2 q2 = uv * 0.6 + vec2(0.0, uTime * 0.4);\n  float m0 = fbm(q2);\n  float mx = fbm(q2 + vec2(0.05, 0.0));\n  float my = fbm(q2 + vec2(0.0, 0.05));\n  vec2 g2 = vec2(mx - m0, my - m0) / 0.05;\n  float bump = 0.06 + 0.06 * (1.0 - vThin);\n  vec3 Np = normalize(N + (g.x * T + g.y * B) * bump + (g2.x * T + g2.y * B) * 0.03);\n\n  // base water colour by height and thickness\n  vec3 deep = vec3(0.012, 0.16, 0.25);\n  vec3 mid = vec3(0.0, 0.40, 0.48);\n  vec3 lite = vec3(0.16, 0.66, 0.62);\n  vec3 col = mix(deep, mid, smoothstep(0.0, 0.55, vHf));\n  col = mix(col, lite, vThin * 0.55);\n  // streaks / texture bands\n  col *= 0.92 + 0.16 * n0;\n\n  float ndl = dot(Np, L);\n  float diff = clamp((ndl + 0.55) / 1.55, 0.0, 1.0);\n  float hemi = 0.5 + 0.5 * Np.y;\n  vec3 ambient = mix(deep * 1.4, uSkyHorizon * 0.55, hemi);\n  vec3 lit = col * (ambient * 0.9 + uSunCol * diff * 0.85);\n\n  // sun shining through the thin lip / upper face\n  float back = clamp(dot(-V, L), 0.0, 1.0);\n  float trans = vThin * (0.25 + 0.75 * pow(back, 2.0)) + vThin * 0.35 * clamp(dot(Np, -L), 0.0, 1.0);\n  lit += vec3(0.20, 0.78, 0.66) * trans * 0.9;\n\n  // specular + Fresnel sky reflection\n  vec3 Hh = normalize(L + V);\n  float spec = pow(max(dot(Np, Hh), 0.0), 160.0) * 1.3 + pow(max(dot(Np, Hh), 0.0), 24.0) * 0.12;\n  float fres = 0.03 + 0.97 * pow(1.0 - max(dot(Np, V), 0.0), 5.0);\n  vec3 R = reflect(-V, Np);\n  R.y = abs(R.y);\n  vec3 sky = skyColor(R);\n  lit = mix(lit, sky, fres * 0.75);\n  lit += uSunCol * spec;\n\n  // foam\n  float fn = fbm(uv * 0.7 + vec2(-uTime * 0.6, uTime * 0.2)) * 0.75 + fbm(uv * 2.4) * 0.25;\n  float fAmt = clamp((fn - (1.0 - vFoam * 1.15)) * 4.0, 0.0, 1.0) * clamp(vFoam * 3.0, 0.0, 1.0);\n  // thin streaks low on the face from old whitewater\n  float streak = fbm(vec2(uv.x * 0.08, uv.y * 0.9)) ;\n  float streakAmt = smoothstep(0.62, 0.8, streak) * (1.0 - smoothstep(0.1, 0.45, vHf)) * 0.35 * smoothstep(0.0, 0.05, vHf);\n  fAmt = max(fAmt, streakAmt);\n  vec3 foamCol = vec3(0.96, 0.98, 1.0) * (0.62 + 0.38 * diff) * (0.82 + 0.22 * n0) + uSunCol * spec * 0.3;\n  lit = mix(lit, foamCol, fAmt);\n\n  lit *= mix(1.0, vAO, 0.85);\n\n  float fog = smoothstep(uFogNear, uFogFar, vFog);\n  lit = mix(lit, uFogCol, fog);\n  gl_FragColor = vec4(lit, 1.0);\n}\n","skyVert":"varying vec3 vDir;\nvoid main() {\n  vDir = normalize(position);\n  vec4 mv = modelViewMatrix * vec4(position, 1.0);\n  gl_Position = projectionMatrix * mv;\n  gl_Position.z = gl_Position.w; // keep the dome on the far plane\n}\n","skyFrag":"uniform vec3 uSunDir;\nuniform vec3 uSunCol;\nuniform vec3 uSkyZenith;\nuniform vec3 uSkyHorizon;\nuniform vec3 uFogCol;\nuniform float uTime;\nvarying vec3 vDir;\nfloat hash(vec2 p) {\n  // lattice-wrapped, sine-free hash: stable on mobile GPUs and for large coordinates\n  p = mod(p, 256.0);\n  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nfloat vnoise(vec2 p) {\n  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);\n  float a = hash(i); float b = hash(i + vec2(1.0, 0.0)); float c = hash(i + vec2(0.0, 1.0)); float d = hash(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);\n}\nvoid main() {\n  vec3 d = normalize(vDir);\n  float h = d.y;\n  vec3 c = mix(uSkyHorizon, uSkyZenith, pow(clamp(h, 0.0, 1.0), 0.55));\n  // haze band at the horizon\n  c = mix(c, uFogCol, (1.0 - smoothstep(-0.02, 0.18, h)) * 0.85);\n  float sd = max(dot(d, uSunDir), 0.0);\n  c += uSunCol * (pow(sd, 6.0) * 0.22 + pow(sd, 60.0) * 0.5 + pow(sd, 1200.0) * 2.2);\n  // thin high cloud\n  vec2 cuv = d.xz / max(h, 0.08);\n  float cl = vnoise(cuv * 0.9 + vec2(uTime * 0.004, 0.0)) * 0.6 + vnoise(cuv * 2.7 + vec2(0.0, uTime * 0.006)) * 0.4;\n  float cloud = smoothstep(0.52, 0.78, cl) * smoothstep(0.05, 0.3, h) * 0.55;\n  c = mix(c, vec3(0.97, 0.97, 0.99), cloud);\n  if (h < 0.0) c = uFogCol;\n  gl_FragColor = vec4(c, 1.0);\n}\n","oceanVert":"varying vec3 vWorld;\nvarying float vFog;\nvoid main() {\n  vec4 w = modelMatrix * vec4(position, 1.0);\n  vWorld = w.xyz;\n  vec4 mv = viewMatrix * w;\n  vFog = -mv.z;\n  gl_Position = projectionMatrix * mv;\n}\n","oceanFrag":"uniform float uTime;\nuniform vec3 uSunDir;\nuniform vec3 uSunCol;\nuniform vec3 uSkyZenith;\nuniform vec3 uSkyHorizon;\nuniform vec3 uFogCol;\nuniform float uFogNear;\nuniform float uFogFar;\nvarying vec3 vWorld;\nvarying float vFog;\nfloat hash(vec2 p) {\n  // lattice-wrapped, sine-free hash: stable on mobile GPUs and for large coordinates\n  p = mod(p, 256.0);\n  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));\n  p3 += dot(p3, p3.yzx + 33.33);\n  return fract((p3.x + p3.y) * p3.z);\n}\nfloat vnoise(vec2 p) {\n  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);\n  float a = hash(i); float b = hash(i + vec2(1.0, 0.0)); float c = hash(i + vec2(0.0, 1.0)); float d = hash(i + vec2(1.0, 1.0));\n  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);\n}\nvoid main() {\n  vec3 V = normalize(cameraPosition - vWorld);\n  vec2 uv = vWorld.xz * 0.08 + vec2(-uTime * 0.76, 0.0);\n  float n0 = vnoise(uv); float nx = vnoise(uv + vec2(0.1, 0.0)); float ny = vnoise(uv + vec2(0.0, 0.1));\n  vec3 N = normalize(vec3((n0 - nx) * 2.0, 1.0, (n0 - ny) * 2.0));\n  vec3 deep = vec3(0.012, 0.17, 0.26);\n  float fres = 0.03 + 0.97 * pow(1.0 - max(dot(N, V), 0.0), 5.0);\n  vec3 R = reflect(-V, N); R.y = abs(R.y);\n  vec3 sky = mix(uSkyHorizon, uSkyZenith, pow(clamp(R.y, 0.0, 1.0), 0.55));\n  vec3 Hh = normalize(uSunDir + V);\n  float spec = pow(max(dot(N, Hh), 0.0), 120.0);\n  vec3 c = mix(deep * (0.8 + 0.3 * n0), sky, fres * 0.8) + uSunCol * spec * 0.8;\n  float fog = smoothstep(uFogNear, uFogFar, vFog);\n  c = mix(c, uFogCol, fog);\n  gl_FragColor = vec4(c, 1.0);\n}\n","pointsVert":"attribute float aSize;\nattribute float aAlpha;\nuniform float uScale;\nuniform float uFogNear;\nuniform float uFogFar;\nvarying float vA;\nvarying float vFog;\nvoid main() {\n  vec4 mv = modelViewMatrix * vec4(position, 1.0);\n  float dist = max(-mv.z, 0.5);\n  gl_PointSize = clamp(aSize * uScale / dist, 1.0, 160.0);\n  gl_Position = projectionMatrix * mv;\n  vA = aAlpha;\n  vFog = smoothstep(uFogNear, uFogFar, dist);\n}\n","pointsFrag":"uniform vec3 uColor;\nvarying float vA;\nvarying float vFog;\nvoid main() {\n  vec2 d = gl_PointCoord - vec2(0.5);\n  float r = length(d);\n  float a = smoothstep(0.5, 0.12, r) * vA * (1.0 - vFog);\n  if (a < 0.01) discard;\n  gl_FragColor = vec4(uColor, a);\n}\n"};
+// GLSL. The wave vertex shader mirrors the JS wave model below line for line;
+// uS is the wave scale (lengths x uS, speeds and times x sqrt(uS)).
+window.SHADERS = {
+waveVert: `uniform float uTime;
+uniform float uH;
+uniform float uZBreak;
+uniform float uLT;
+uniform float uLF;
+uniform float uLS;
+uniform float uDF;
+uniform float uDB;
+uniform float uZCenter;
+uniform float uS;
+
+varying vec3 vWorld;
+varying vec3 vNormal;
+varying vec3 vTangent;
+varying float vFoam;
+varying float vThin;
+varying float vAO;
+varying float vArc;
+varying float vHf;
+varying float vFog;
+
+const float DEG = 0.017453292519943295;
+const float PI = 3.14159265358979;
+
+float sstep(float e0, float e1, float x) { float t = clamp((x - e0) / (e1 - e0), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
+
+struct WP {
+  float H; float phi; float lam; float kappa; float gT; float gJ; float vj; float tauLand; float tauTip;
+  float d0; float w; float Xface; float Xback; float mA; float mX; float mW; float xShift;
+};
+
+WP waveParams(float z) {
+  WP p;
+  float sv = sqrt(uS);
+  float d = z - uZBreak;
+  float phi = -d / uLT;
+  float lamF = 0.06 * sstep(-0.8, 0.0, phi);
+  float lam = mix(lamF, 1.0, clamp(phi, 0.0, 1.0));
+  float kappa = sstep(1.0, 2.0, phi);
+  float sh = sstep(uLF, uLF + uLS, d);
+  float taper = mix(1.0, 0.72, sh) * mix(1.0, 0.6, sstep(uLF + uLS, uLF + uLS + 450.0 * uS, d));
+  float H = uH * taper * (1.0 + 0.04 * sin(z * 0.021 / uS + 1.3) + 0.03 * sin(z * 0.053 / uS)) * (1.0 - 0.35 * kappa);
+  float gT = mix(72.0, 92.0, sstep(0.0, uLF, d));
+  gT = mix(gT, 108.0, sh);
+  gT = mix(gT, 112.0, kappa);
+  gT *= DEG;
+  float fold = mix(8.0, 32.0, lam) * DEG;
+  float gJ = gT - fold;
+  float gS = clamp(gJ, 30.0 * DEG, 75.0 * DEG);
+  float d0 = H * mix(mix(0.30, 0.16, lam), 0.42, kappa);
+  float cg = cos(gS); float sg = sin(gS);
+  float yT = 0.95; float xLand = 1.05; float yLand = 0.10;
+  float vj0 = sqrt(xLand * xLand / (2.0 * cg * cg * (yT + xLand * sg / cg - yLand)));
+  float tauLand = xLand / (vj0 * cg);
+  p.H = H; p.phi = phi; p.lam = lam; p.kappa = kappa; p.gT = gT; p.gJ = gJ;
+  p.vj = vj0 * (1.0 - 0.3 * kappa);
+  p.tauLand = tauLand;
+  float rag = 1.0 + 0.07 * sin(z * 0.21 / uS + 0.6 * uTime / sv) + 0.04 * sin(z * 0.57 / uS - 0.9 * uTime / sv);
+  p.tauTip = tauLand * lam * rag * (1.0 - 0.85 * sstep(0.25, 1.0, kappa));
+  p.d0 = d0;
+  p.w = sstep(0.0, 0.25, lam) * (1.0 - kappa);
+  p.Xface = 1.2 * H;
+  p.Xback = 2.2 * H;
+  p.mA = H * (0.10 * sstep(0.55, 0.95, phi) + 0.30 * sstep(1.0, 1.7, phi));
+  p.mX = p.Xface * 0.85 + H * 1.2 * sstep(1.2, 3.5, phi);
+  p.mW = H * (0.45 + 0.9 * sstep(1.0, 3.0, phi));
+  p.xShift = uS * (3.0 * sin(z * 0.011 / uS) + 1.5 * sin(z * 0.037 / uS + 2.0));
+  return p;
+}
+
+float swell(float x, float z, float t, float H) {
+  float a = H / 26.0;
+  x /= uS; z /= uS; t /= sqrt(uS);
+  return a * (0.6 * sin(0.03 * x + 0.7 * t) + 0.3 * sin(0.07 * x - 0.02 * z + 1.3 * t) + 0.2 * sin(0.11 * z + 0.05 * x + 0.9 * t));
+}
+
+vec2 hermite(vec2 p0, vec2 m0, vec2 p1, vec2 m1, float v) {
+  float v2 = v * v; float v3 = v2 * v;
+  float h00 = 2.0 * v3 - 3.0 * v2 + 1.0; float h10 = v3 - 2.0 * v2 + v; float h01 = -2.0 * v3 + 3.0 * v2; float h11 = v3 - v2;
+  return h00 * p0 + h10 * m0 + h01 * p1 + h11 * m1;
+}
+
+vec2 jetPos(float tau, vec2 C0, float cj, float sj, float vj, float H) {
+  return C0 + H * vec2(vj * cj * tau, vj * sj * tau - 0.5 * tau * tau);
+}
+vec2 jetTan(float tau, float cj, float sj, float vj) {
+  return normalize(vec2(vj * cj, vj * sj - tau));
+}
+
+// Cross-section point; aux = (foam, thin, ao, arc)
+vec2 profile(float s, float z, float t, WP p, out vec4 aux) {
+  float H = p.H; float Xface = p.Xface;
+  float x = 0.0; float y = 0.0; float foam = 0.0; float thin = 0.0; float ao = 1.0; float arc = 0.0;
+  vec2 T = vec2(0.0, 0.95 * H);
+  float cj = cos(p.gJ); float sj = sin(p.gJ);
+  vec2 nR = vec2(sj, -cj);
+  vec2 C0 = T - 0.5 * p.d0 * nR;
+  vec2 top = T - p.d0 * nR;
+  float Lface = 1.68 * H;
+  if (s < 0.14) {
+    float u = s / 0.14; float w = (1.0 - u) * (1.0 - u);
+    x = Xface + uDF * w; y = 0.0;
+    arc = -(x - Xface);
+    y += sstep(0.0, 60.0 * uS, x - Xface) * swell(x, z, t, H);
+  } else if (s < 0.46) {
+    float v = (s - 0.14) / 0.32;
+    float m1 = 1.3 * T.y;
+    vec2 q = hermite(vec2(Xface, 0.0), vec2(-1.4 * Xface, 0.0), T, m1 * vec2(cos(p.gT), sin(p.gT)), v);
+    x = q.x; y = q.y;
+    arc = v * Lface;
+    thin = sstep(0.55, 1.0, v) * mix(0.25, 0.6, p.lam);
+    ao = 1.0 - 0.55 * p.lam * sstep(0.5, 1.0, v);
+  } else if (s < 0.74) {
+    float lx = 0.0; float ly = 0.0; float lfoam = 0.0; float lthin = 1.0; float lao = 1.0; float larc = Lface;
+    float tauTip = p.tauTip;
+    float feather = sstep(-1.2, -0.1, p.phi) * (1.0 - sstep(0.5, 1.5, p.phi));
+    if (s < 0.58) {
+      float u = (s - 0.46) / 0.12; float tau = u * tauTip;
+      vec2 J = jetPos(tau, C0, cj, sj, p.vj, H); vec2 tg = jetTan(tau, cj, sj, p.vj);
+      float th = p.d0 * (1.0 - 0.5 * tau / p.tauLand);
+      lx = J.x + 0.5 * th * tg.y; ly = J.y - 0.5 * th * tg.x;
+      larc = Lface + tau * p.vj * H;
+      lthin = 0.6 + 0.4 * u; lao = 1.0 - 0.65 * p.lam;
+      lfoam = p.lam * sstep(0.85, 1.0, u) * 0.35;
+    } else if (s < 0.62) {
+      float a = (s - 0.58) / 0.04 * PI; float tau = tauTip;
+      vec2 J = jetPos(tau, C0, cj, sj, p.vj, H); vec2 tg = jetTan(tau, cj, sj, p.vj);
+      float r = 0.5 * p.d0 * (1.0 - 0.5 * tau / p.tauLand);
+      float ca = cos(a); float sa = sin(a);
+      lx = J.x + r * (ca * tg.y + sa * tg.x); ly = J.y + r * (-ca * tg.x + sa * tg.y);
+      larc = Lface + tau * p.vj * H + r * a;
+      lthin = 1.0; lao = 1.0 - 0.65 * p.lam * (1.0 - a / PI);
+      lfoam = p.lam * (0.25 + 0.45 * sa) + 0.9 * feather;
+    } else {
+      float u = 1.0 - (s - 0.62) / 0.12; float tau = u * tauTip;
+      vec2 J = jetPos(tau, C0, cj, sj, p.vj, H); vec2 tg = jetTan(tau, cj, sj, p.vj);
+      float th = p.d0 * (1.0 - 0.5 * tau / p.tauLand);
+      lx = J.x - 0.5 * th * tg.y; ly = J.y + 0.5 * th * tg.x;
+      larc = Lface + tau * p.vj * H;
+      lthin = 0.9; lao = 1.0;
+      lfoam = p.lam * sstep(0.85, 1.0, u) * 0.3 + 0.4 * feather * (1.0 - u);
+    }
+    float u2 = (s - 0.46) / 0.28; float mag = 0.7 * p.d0;
+    float a1 = 230.0 * DEG;
+    vec2 cap = hermite(T, mag * vec2(cos(p.gT), sin(p.gT)), top, mag * vec2(cos(a1), sin(a1)), u2);
+    float w = p.w;
+    x = mix(cap.x, lx, w); y = mix(cap.y, ly, w);
+    foam = mix(0.9 * feather * sstep(0.2, 0.5, u2) * (1.0 - sstep(0.5, 0.8, u2)), lfoam, w);
+    thin = mix(0.35, lthin, w); ao = mix(1.0, lao, w);
+    arc = mix(Lface + u2 * 2.0 * p.d0, larc, w);
+  } else if (s < 0.86) {
+    float u = (s - 0.74) / 0.12;
+    float aF = mix(230.0 * DEG, p.gJ + PI, p.w);
+    vec2 q = hermite(top, H * vec2(cos(aF), sin(aF)), vec2(-p.Xback, 0.0), vec2(-1.5 * H, 0.0), u);
+    x = q.x; y = q.y;
+    arc = Lface + 2.0 * p.d0 + u * 2.6 * H;
+    thin = sstep(0.3, 0.0, u) * 0.3;
+    y += sstep(0.6, 1.0, u) * swell(x, z, t, H) * 0.5;
+  } else {
+    float u = (s - 0.86) / 0.14;
+    x = -p.Xback - uDB * u * u; y = 0.0;
+    arc = Lface + 2.0 * p.d0 + 2.6 * H + (-p.Xback - x);
+    y += mix(0.5, 1.0, sstep(0.0, 60.0 * uS, -p.Xback - x)) * swell(x, z, t, H);
+  }
+  if (s < 0.46) {
+    float q = (x - p.mX) / p.mW; float b = exp(-q * q);
+    y += p.mA * b;
+    foam = max(foam, b * clamp(p.mA / (0.06 * H), 0.0, 1.0));
+  }
+  if (s < 0.74) foam = max(foam, p.kappa * 0.95); else foam = max(foam, p.kappa * 0.3);
+  aux = vec4(foam, thin, ao, arc);
+  return vec2(x + p.xShift, y);
+}
+
+// dense (~1.5 m rows) at the surfer, stretching to +4.8 km ahead and -1.8 km behind
+float zMap(float u) { return u >= 0.0 ? uS * (50.0 * u + 750.0 * u * u) : -uS * (50.0 * abs(u) + 250.0 * u * u); }
+
+void main() {
+  float s = position.x;
+  float zl = position.y;
+  float z = uZCenter + zMap(zl);
+  float ds = 0.0025;
+  float dz = 1.0;
+  WP p = waveParams(z);
+  vec4 aux;
+  vec2 c = profile(s, z, uTime, p, aux);
+  vec4 ax;
+  vec2 cs1 = profile(min(s + ds, 1.0), z, uTime, p, ax);
+  vec2 cs0 = profile(max(s - ds, 0.0), z, uTime, p, ax);
+  WP p1 = waveParams(z + dz);
+  vec2 cz1 = profile(s, z + dz, uTime, p1, ax);
+  WP p0 = waveParams(z - dz);
+  vec2 cz0 = profile(s, z - dz, uTime, p0, ax);
+  vec3 dPs = vec3(cs1.x - cs0.x, cs1.y - cs0.y, 0.0);
+  vec3 dPz = vec3(cz1.x - cz0.x, cz1.y - cz0.y, 2.0 * dz);
+  vec3 n = normalize(cross(dPs, dPz));
+  vec3 world = vec3(c.x, c.y, z);
+  vWorld = world;
+  vNormal = n;
+  vTangent = normalize(dPs);
+  vFoam = aux.x; vThin = aux.y; vAO = aux.z; vArc = aux.w;
+  vHf = clamp(c.y / max(p.H, 1.0), 0.0, 1.5);
+  vec4 mv = viewMatrix * vec4(world, 1.0);
+  vFog = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}
+`,
+waveFrag: `uniform float uTime;
+uniform float uFlow;
+uniform vec3 uSunDir;
+uniform vec3 uSunCol;
+uniform vec3 uSkyZenith;
+uniform vec3 uSkyHorizon;
+uniform vec3 uFogCol;
+uniform float uFogNear;
+uniform float uFogFar;
+
+varying vec3 vWorld;
+varying vec3 vNormal;
+varying vec3 vTangent;
+varying float vFoam;
+varying float vThin;
+varying float vAO;
+varying float vArc;
+varying float vHf;
+varying float vFog;
+
+float hash(vec2 p) {
+  // lattice-wrapped, sine-free hash: stable on mobile GPUs and for large coordinates
+  p = mod(p, 256.0);
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  float a = hash(i); float b = hash(i + vec2(1.0, 0.0)); float c = hash(i + vec2(0.0, 1.0)); float d = hash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+float fbm(vec2 p) {
+  float v = 0.0; float a = 0.5;
+  for (int i = 0; i < 4; i++) { v += a * vnoise(p); p = p * 2.03 + vec2(17.0, 9.0); a *= 0.5; }
+  return v;
+}
+
+vec3 skyColor(vec3 d) {
+  float h = clamp(d.y, 0.0, 1.0);
+  vec3 c = mix(uSkyHorizon, uSkyZenith, pow(h, 0.55));
+  float sd = max(dot(d, uSunDir), 0.0);
+  c += uSunCol * (pow(sd, 8.0) * 0.25 + pow(sd, 400.0) * 1.5);
+  return c;
+}
+
+void main() {
+  vec3 N = normalize(vNormal);
+  vec3 T = normalize(vTangent - N * dot(vTangent, N));
+  vec3 B = normalize(cross(N, T));
+  vec3 V = normalize(cameraPosition - vWorld);
+  vec3 L = uSunDir;
+
+  // flow coordinates: water travels up the face / through the wave at uFlow
+  vec2 uv = vec2(vArc - uFlow * uTime, vWorld.z);
+  float e = 0.35;
+  vec2 q = uv * 0.09;
+  float n0 = fbm(q);
+  float nx = fbm(q + vec2(e * 0.09, 0.0));
+  float ny = fbm(q + vec2(0.0, e * 0.09));
+  vec2 g = vec2(nx - n0, ny - n0) / (e * 0.09);
+  // finer ripples
+  vec2 q2 = uv * 0.6 + vec2(0.0, uTime * 0.4);
+  float m0 = fbm(q2);
+  float mx = fbm(q2 + vec2(0.05, 0.0));
+  float my = fbm(q2 + vec2(0.0, 0.05));
+  vec2 g2 = vec2(mx - m0, my - m0) / 0.05;
+  float bump = 0.06 + 0.06 * (1.0 - vThin);
+  // fine detail fades with distance so the wide shots of the big face don't shimmer
+  float nearK = 1.0 - smoothstep(90.0, 450.0, vFog);
+  vec3 Np = normalize(N + (g.x * T + g.y * B) * bump + (g2.x * T + g2.y * B) * 0.03 * nearK);
+
+  // base water colour by height and thickness
+  vec3 deep = vec3(0.012, 0.16, 0.25);
+  vec3 mid = vec3(0.0, 0.40, 0.48);
+  vec3 lite = vec3(0.16, 0.66, 0.62);
+  vec3 col = mix(deep, mid, smoothstep(0.0, 0.55, vHf));
+  col = mix(col, lite, vThin * 0.55);
+  // streaks / texture bands
+  col *= 0.92 + 0.16 * n0;
+
+  float ndl = dot(Np, L);
+  float diff = clamp((ndl + 0.55) / 1.55, 0.0, 1.0);
+  float hemi = 0.5 + 0.5 * Np.y;
+  vec3 ambient = mix(deep * 1.4, uSkyHorizon * 0.55, hemi);
+  vec3 lit = col * (ambient * 0.9 + uSunCol * diff * 0.85);
+
+  // sun shining through the thin lip / upper face
+  float back = clamp(dot(-V, L), 0.0, 1.0);
+  float trans = vThin * (0.25 + 0.75 * pow(back, 2.0)) + vThin * 0.35 * clamp(dot(Np, -L), 0.0, 1.0);
+  lit += vec3(0.20, 0.78, 0.66) * trans * 0.9;
+
+  // specular + Fresnel sky reflection
+  vec3 Hh = normalize(L + V);
+  float spec = pow(max(dot(Np, Hh), 0.0), 160.0) * 1.3 + pow(max(dot(Np, Hh), 0.0), 24.0) * 0.12;
+  float fres = 0.03 + 0.97 * pow(1.0 - max(dot(Np, V), 0.0), 5.0);
+  vec3 R = reflect(-V, Np);
+  R.y = abs(R.y);
+  vec3 sky = skyColor(R);
+  lit = mix(lit, sky, fres * 0.75);
+  lit += uSunCol * spec;
+
+  // foam
+  float fn = fbm(uv * 0.7 + vec2(-uTime * 0.6, uTime * 0.2)) * 0.75 + fbm(uv * 2.4) * 0.25;
+  float fAmt = clamp((fn - (1.0 - vFoam * 1.15)) * 4.0, 0.0, 1.0) * clamp(vFoam * 3.0, 0.0, 1.0);
+  // thin streaks low on the face from old whitewater
+  float streak = fbm(vec2(uv.x * 0.08, uv.y * 0.9)) ;
+  float streakAmt = smoothstep(0.62, 0.8, streak) * (1.0 - smoothstep(0.1, 0.45, vHf)) * 0.35 * smoothstep(0.0, 0.05, vHf) * nearK;
+  fAmt = max(fAmt, streakAmt);
+  vec3 foamCol = vec3(0.96, 0.98, 1.0) * (0.62 + 0.38 * diff) * (0.82 + 0.22 * n0) + uSunCol * spec * 0.3;
+  lit = mix(lit, foamCol, fAmt);
+
+  lit *= mix(1.0, vAO, 0.85);
+
+  float fog = smoothstep(uFogNear, uFogFar, vFog);
+  lit = mix(lit, uFogCol, fog);
+  gl_FragColor = vec4(lit, 1.0);
+}
+`,
+skyVert: `varying vec3 vDir;
+void main() {
+  vDir = normalize(position);
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_Position.z = gl_Position.w; // keep the dome on the far plane
+}
+`,
+skyFrag: `uniform vec3 uSunDir;
+uniform vec3 uSunCol;
+uniform vec3 uSkyZenith;
+uniform vec3 uSkyHorizon;
+uniform vec3 uFogCol;
+uniform float uTime;
+varying vec3 vDir;
+float hash(vec2 p) {
+  // lattice-wrapped, sine-free hash: stable on mobile GPUs and for large coordinates
+  p = mod(p, 256.0);
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  float a = hash(i); float b = hash(i + vec2(1.0, 0.0)); float c = hash(i + vec2(0.0, 1.0)); float d = hash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+void main() {
+  vec3 d = normalize(vDir);
+  float h = d.y;
+  vec3 c = mix(uSkyHorizon, uSkyZenith, pow(clamp(h, 0.0, 1.0), 0.55));
+  // haze band at the horizon
+  c = mix(c, uFogCol, (1.0 - smoothstep(-0.02, 0.18, h)) * 0.85);
+  float sd = max(dot(d, uSunDir), 0.0);
+  c += uSunCol * (pow(sd, 6.0) * 0.22 + pow(sd, 60.0) * 0.5 + pow(sd, 1200.0) * 2.2);
+  // thin high cloud
+  vec2 cuv = d.xz / max(h, 0.08);
+  float cl = vnoise(cuv * 0.9 + vec2(uTime * 0.004, 0.0)) * 0.6 + vnoise(cuv * 2.7 + vec2(0.0, uTime * 0.006)) * 0.4;
+  float cloud = smoothstep(0.52, 0.78, cl) * smoothstep(0.05, 0.3, h) * 0.55;
+  c = mix(c, vec3(0.97, 0.97, 0.99), cloud);
+  if (h < 0.0) c = uFogCol;
+  gl_FragColor = vec4(c, 1.0);
+}
+`,
+oceanVert: `varying vec3 vWorld;
+varying float vFog;
+void main() {
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vWorld = w.xyz;
+  vec4 mv = viewMatrix * w;
+  vFog = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}
+`,
+oceanFrag: `uniform float uTime;
+uniform vec3 uSunDir;
+uniform vec3 uSunCol;
+uniform vec3 uSkyZenith;
+uniform vec3 uSkyHorizon;
+uniform vec3 uFogCol;
+uniform float uFogNear;
+uniform float uFogFar;
+varying vec3 vWorld;
+varying float vFog;
+float hash(vec2 p) {
+  // lattice-wrapped, sine-free hash: stable on mobile GPUs and for large coordinates
+  p = mod(p, 256.0);
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  float a = hash(i); float b = hash(i + vec2(1.0, 0.0)); float c = hash(i + vec2(0.0, 1.0)); float d = hash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+void main() {
+  vec3 V = normalize(cameraPosition - vWorld);
+  vec2 uv = vWorld.xz * 0.08 + vec2(-uTime * 0.76, 0.0);
+  float n0 = vnoise(uv); float nx = vnoise(uv + vec2(0.1, 0.0)); float ny = vnoise(uv + vec2(0.0, 0.1));
+  vec3 N = normalize(vec3((n0 - nx) * 2.0, 1.0, (n0 - ny) * 2.0));
+  vec3 deep = vec3(0.012, 0.17, 0.26);
+  float fres = 0.03 + 0.97 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
+  vec3 R = reflect(-V, N); R.y = abs(R.y);
+  vec3 sky = mix(uSkyHorizon, uSkyZenith, pow(clamp(R.y, 0.0, 1.0), 0.55));
+  vec3 Hh = normalize(uSunDir + V);
+  float spec = pow(max(dot(N, Hh), 0.0), 120.0);
+  vec3 c = mix(deep * (0.8 + 0.3 * n0), sky, fres * 0.8) + uSunCol * spec * 0.8;
+  float fog = smoothstep(uFogNear, uFogFar, vFog);
+  c = mix(c, uFogCol, fog);
+  gl_FragColor = vec4(c, 1.0);
+}
+`,
+pointsVert: `attribute float aSize;
+attribute float aAlpha;
+uniform float uScale;
+uniform float uFogNear;
+uniform float uFogFar;
+varying float vA;
+varying float vFog;
+void main() {
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  float dist = max(-mv.z, 0.5);
+  gl_PointSize = clamp(aSize * uScale / dist, 1.0, 280.0);
+  gl_Position = projectionMatrix * mv;
+  vA = aAlpha;
+  vFog = smoothstep(uFogNear, uFogFar, dist);
+}
+`,
+pointsFrag: `uniform vec3 uColor;
+varying float vA;
+varying float vFog;
+void main() {
+  vec2 d = gl_PointCoord - vec2(0.5);
+  float r = length(d);
+  float a = smoothstep(0.5, 0.12, r) * vA * (1.0 - vFog);
+  if (a < 0.01) discard;
+  gl_FragColor = vec4(uColor, a);
+}
+`
+};
 </script>
 <script>
 // ---------------------------------------------------------------------------
@@ -158,6 +653,10 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
 // still, the crest runs along +z, the face looks toward +x, the trough and
 // open ocean are at +x, the back of the wave at -x. The break point peels
 // along +z at the peel speed; behind it the wave has already broken.
+//
+// The wave is built at scale S: every length is S times the original 24-44 m
+// wave and every speed and time sqrt(S) times (Froude scaling, so gravity and
+// the shape of the break stay physically consistent).
 //
 // Cross-section parameter s in [0,1]:
 //   A [0.00,0.14] flat ocean ahead      B [0.14,0.46] face (trough -> throat)
@@ -177,15 +676,19 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
   const mix = (a, b, t) => a + (b - a) * t;
   function sstep(e0, e1, x) { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
 
+  const S = 6;              // wave scale: six times the original wave
+  const SV = Math.sqrt(S);  // speed / time scale
+
   // Global wave state (uniforms in the shader).
   const W = {
-    H: 26,        // base wave height, metres
-    zBreak: -70,  // where the lip is being thrown right now (moves along +z)
-    LT: 80,       // tube length: distance along z from lip throw to lip landing
-    LF: 45,       // pocket/feathering length ahead of the break point
-    LS: 380,      // shoulder taper length
-    DF: 320,      // flat ocean extent ahead of the trough
-    DB: 220,      // flat ocean extent behind the wave
+    S, SV,
+    H: 26 * S,        // base wave height, metres
+    zBreak: -70 * S,  // where the lip is being thrown right now (moves along +z)
+    LT: 80 * S,       // tube length: distance along z from lip throw to lip landing
+    LF: 45 * S,       // pocket/feathering length ahead of the break point
+    LS: 380 * S,      // shoulder taper length
+    DF: 320 * S,      // flat ocean extent ahead of the trough
+    DB: 220 * S,      // flat ocean extent behind the wave
     time: 0
   };
 
@@ -198,8 +701,8 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     const lam = mix(lamF, 1.0, clamp(phi, 0, 1));         // lip progress 0..1
     const kappa = sstep(1.0, 2.0, phi);                    // collapse into whitewater
     const sh = sstep(W.LF, W.LF + W.LS, d);                // shoulder blend
-    const taper = mix(1.0, 0.72, sh) * mix(1.0, 0.6, sstep(W.LF + W.LS, W.LF + W.LS + 450, d));
-    const H = W.H * taper * (1.0 + 0.04 * Math.sin(z * 0.021 + 1.3) + 0.03 * Math.sin(z * 0.053)) * (1.0 - 0.35 * kappa);
+    const taper = mix(1.0, 0.72, sh) * mix(1.0, 0.6, sstep(W.LF + W.LS, W.LF + W.LS + 450 * S, d));
+    const H = W.H * taper * (1.0 + 0.04 * Math.sin(z * 0.021 / S + 1.3) + 0.03 * Math.sin(z * 0.053 / S)) * (1.0 - 0.35 * kappa);
     let gT = mix(72, 92, sstep(0, W.LF, d));               // tangent angle at the top of the face
     gT = mix(gT, 108, sh);
     gT = mix(gT, 112, kappa);
@@ -216,7 +719,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     p.gT = gT; p.gJ = gJ;
     p.vj = vj0 * (1.0 - 0.3 * kappa);
     p.tauLand = tauLand;
-    const rag = 1.0 + 0.07 * Math.sin(z * 0.21 + 0.6 * W.time) + 0.04 * Math.sin(z * 0.57 - 0.9 * W.time); // ragged, chandeliering lip edge
+    const rag = 1.0 + 0.07 * Math.sin(z * 0.21 / S + 0.6 * W.time / SV) + 0.04 * Math.sin(z * 0.57 / S - 0.9 * W.time / SV); // ragged, chandeliering lip edge
     p.tauTip = tauLand * lam * rag * (1.0 - 0.85 * sstep(0.25, 1.0, kappa));
     p.d0 = d0;
     p.w = sstep(0.0, 0.25, lam) * (1.0 - kappa);           // crest-cap -> lip blend (cap again once broken)
@@ -225,12 +728,13 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     p.mA = H * (0.10 * sstep(0.55, 0.95, phi) + 0.30 * sstep(1.0, 1.7, phi)); // whitewater mound
     p.mX = p.Xface * 0.85 + H * 1.2 * sstep(1.2, 3.5, phi);
     p.mW = H * (0.45 + 0.9 * sstep(1.0, 3.0, phi));
-    p.xShift = 3.0 * Math.sin(z * 0.011) + 1.5 * Math.sin(z * 0.037 + 2.0);
+    p.xShift = S * (3.0 * Math.sin(z * 0.011 / S) + 1.5 * Math.sin(z * 0.037 / S + 2.0));
     return p;
   }
 
   function swell(x, z, t, H) {
     const a = H / 26;
+    x /= S; z /= S; t /= SV;
     return a * (0.6 * Math.sin(0.03 * x + 0.7 * t) + 0.3 * Math.sin(0.07 * x - 0.02 * z + 1.3 * t) + 0.2 * Math.sin(0.11 * z + 0.05 * x + 0.9 * t));
   }
 
@@ -259,7 +763,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
       const u = s / 0.14, w = (1 - u) * (1 - u);
       x = Xface + W.DF * w; y = 0;
       arc = -(x - Xface);
-      y += sstep(0, 60, x - Xface) * swell(x, z, t, H);
+      y += sstep(0, 60 * S, x - Xface) * swell(x, z, t, H);
     } else if (s < 0.46) {                        // B: face
       const v = (s - 0.14) / 0.32;
       const m1 = 1.3 * Ty;
@@ -325,7 +829,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
       const u = (s - 0.86) / 0.14;
       x = -p.Xback - W.DB * u * u; y = 0;
       arc = Lface + 2.0 * p.d0 + 2.6 * H + (-p.Xback - x);
-      y += mix(0.5, 1.0, sstep(0, 60, -p.Xback - x)) * swell(x, z, t, H);
+      y += mix(0.5, 1.0, sstep(0, 60 * S, -p.Xback - x)) * swell(x, z, t, H);
     }
     // whitewater mound (impact foam ball / broken bore) on the lower front
     if (s < 0.46) {
@@ -394,7 +898,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     return 0.5 * (lo + hi);
   }
 
-  return { W, waveParams, profile, facePoint, surfacePoint, lipReach, faceHAtX, clamp, mix, sstep, DEG };
+  return { W, S, SV, waveParams, profile, facePoint, surfacePoint, lipReach, faceHAtX, clamp, mix, sstep, DEG };
 });
 
 </script>
@@ -402,43 +906,65 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
 // Surf physics: the surfer lives on the wave surface in (h, z) coordinates
 // (h = height fraction up the face, z = along the crest) so it can never
 // fall through the water. Pure math, no three.js, so it runs under Node too.
+//
+// Controls: steer carves (it sets the turn rate, so a held line stays held),
+// thr > 0 pumps for speed (costs legs), thr < 0 stalls on the tail.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./wave.js'));
   else root.SurfPhysics = factory(root.WaveModel);
 })(typeof self !== 'undefined' ? self : this, function (WM) {
   'use strict';
-  const { W, waveParams, facePoint, lipReach, faceHAtX, clamp, mix, sstep, DEG } = WM;
+  const { W, S, SV, waveParams, facePoint, lipReach, faceHAtX, clamp, mix, sstep, DEG } = WM;
   const fp = {}, sp = {};
+  const THETA_MAX = 72 * DEG;      // steepest line up or down the face
+  const DRAG = 0.42 / SV;          // water drag (1/s), Froude-scaled
+  const V_PUMP_TOP = 80;           // m/s: pumping stops helping near 290 km/h
 
   function createState() {
     return {
-      state: 'riding', t: 0, h: 0.45, z: 0, v: 12, theta: 0,
-      score: 0, dist: 0, barrelTime: 0, barrelRun: 0, bestRun: 0, inBarrel: false, airs: 0,
+      state: 'riding', t: 0, h: 0.45, z: 0, v: 12 * SV, theta: 0, carve: 0,
+      score: 0, dist: 0, barrelTime: 0, barrelRun: 0, bestRun: 0, inBarrel: false, airs: 0, topSpeed: 0,
       pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, fwd: { x: 0, y: 0, z: 1 }, nrm: { x: 0, y: 1, z: 0 },
-      peel: 13, wipeT: 0, reason: '', spin: 0, airT: 0, H: 24, phi: -1, lam: 0, foam: 0, deepWarned: false, scraping: false, inWater: false
+      peel: 13 * SV, wipeT: 0, reason: '', spin: 0, airT: 0, H: 24 * S, phi: -1, lam: 0, foam: 0, deepWarned: false, scraping: false, inWater: false,
+      legs: 1, tired: false, pump: 0, stall: 0
     };
   }
 
   function reset(G) {
     Object.assign(G, createState());
-    W.H = 24; W.zBreak = -50; W.time = 0;
+    W.H = 24 * S; W.zBreak = -50 * S; W.time = 0;
     facePoint(G.h, G.z, 0, fp);
     G.pos.x = fp.x; G.pos.y = fp.y; G.pos.z = fp.z;
     G.nrm.x = fp.nx; G.nrm.y = fp.ny; G.nrm.z = fp.nz;
   }
 
-  // One fixed step. steer in [-1,1] (+ climbs toward the wall). Returns a list of events.
-  function step(G, dt, steer) {
+  // One fixed step. steer in [-1,1] (+ carves up toward the lip), thr in [-1,1]
+  // (+ pumps, - stalls). Returns a list of events.
+  function step(G, dt, steer, thr) {
     const ev = [];
+    thr = thr || 0;
     G.t += dt; W.time = G.t;
     const grow = sstep(0, 150, G.t);
-    W.H = mix(24, 44, grow) * (1 + 0.04 * Math.sin(G.t * 0.21));
-    G.peel = mix(13, 17.5, grow);
+    W.H = mix(24, 44, grow) * S * (1 + 0.04 * Math.sin(G.t * 0.21));
+    G.peel = mix(13, 17.5, grow) * SV;
     W.zBreak += G.peel * dt;
 
+    // legs: pumping drains them, cruising refills them; run them flat and you have to rest
+    const wantPump = Math.max(0, thr);
+    const pumpIn = G.tired ? 0 : wantPump;
+    G.legs = clamp(G.legs + (pumpIn > 0 ? -0.2 * pumpIn : 0.09) * dt, 0, 1);
+    if (G.legs <= 0 && !G.tired) { G.tired = true; ev.push({ type: 'flash', text: 'Legs gone: cruise to recover', cls: 'red' }); }
+    if (G.tired && G.legs > 0.35) G.tired = false;
+    G.pump = pumpIn; G.stall = Math.max(0, -thr);
+
     if (G.state === 'riding') {
-      const thetaMax = 44 * DEG;
-      G.theta += (steer * thetaMax - G.theta) * (1 - Math.exp(-dt * 5.5));
+      // carving: steer sets the turn rate; let go and the board slowly settles back to trim
+      const turnRate = 2.4 * (1 - 0.3 * sstep(30, 75, G.v));   // rad/s, stiffer at speed
+      if (steer !== 0) G.theta += steer * turnRate * dt;
+      else G.theta *= Math.exp(-dt * 0.9);
+      if (G.h <= 0 && G.theta < 0) G.theta *= Math.exp(-dt * 4);  // nowhere lower to go: the bottom turn starts itself
+      G.theta = clamp(G.theta, -THETA_MAX, THETA_MAX);
+      G.carve = steer;
       facePoint(G.h, G.z, G.t, fp);
       const sinT = Math.sin(G.theta), cosT = Math.cos(G.theta);
       // direction of travel in the tangent plane
@@ -447,25 +973,29 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
       const phi = fp.phi, lam = fp.lam, d = G.z - W.zBreak;
       G.H = fp.H; G.phi = phi; G.lam = lam; G.foam = fp.foam;
       const steep = clamp(fp.ty * 1.15, 0, 1);
-      const pocket = (1 - sstep(0, 200, d)) * (1 - sstep(0.85, 1.2, phi));
+      const pocket = (1 - sstep(0, 200 * S, d)) * (1 - sstep(0.85, 1.2, phi));
       // the wave only really drives the board where the face is steep: trim high to go fast
       const drive = 0.1 + 0.9 * sstep(0.4, 1.0, steep);
       const push = (5.0 + 2.35 * pocket) * drive;
       const gravity = -9.8 * dy;
-      const dv = push - 0.42 * G.v + gravity - 0.18 * G.v * sinT * sinT;
+      // pumping works best on a steep face and fades out near top speed; stalling digs the tail in
+      const pumpA = pumpIn * (1.6 + 3.4 * sstep(0.3, 0.9, steep)) * (1 - sstep(55, V_PUMP_TOP, G.v));
+      const stallA = G.stall * (2.5 + 0.12 * G.v);
+      const dv = push + pumpA - stallA - DRAG * G.v + gravity - (0.18 / SV) * G.v * sinT * sinT;
       G.v = Math.max(0, G.v + dv * dt);
+      G.topSpeed = Math.max(G.topSpeed, G.v);
       const Lface = 1.68 * fp.H;
       let dh = G.v * sinT / Lface;
-      dh += 0.06 * sstep(0.78, 0.97, G.h) * clamp((lam - 0.05) / 0.9, 0, 1); // the lip draws you up
-      dh += 0.12 * clamp(1 - G.v / 9, 0, 1);                               // too slow: the wave lifts you over
+      dh += (0.06 / SV) * sstep(0.78, 0.97, G.h) * clamp((lam - 0.05) / 0.9, 0, 1); // the lip draws you up
+      dh += (0.12 / SV) * clamp(1 - G.v / (9 * SV), 0, 1);                       // too slow: the wave lifts you over
       G.h += dh * dt;
       G.z += G.v * cosT * dt;
       G.dist = Math.max(G.dist, G.z);
 
       const reach = lipReach(G.z);
-      const covered = lam > 0.4 && reach > fp.x + 2.0 && phi > 0.08 && phi < 1.25 && G.h > 0.2;
+      const covered = lam > 0.4 && reach > fp.x + 2.0 * S && phi > 0.08 && phi < 1.25 && G.h > 0.2;
       if (covered && !G.inBarrel) ev.push({ type: 'flash', text: 'In the tube', cls: 'teal' });
-      if (phi > 0.95 && !G.deepWarned) { G.deepWarned = true; ev.push({ type: 'flash', text: 'Too deep! Speed up', cls: 'red' }); }
+      if (phi > 0.95 && !G.deepWarned) { G.deepWarned = true; ev.push({ type: 'flash', text: 'Too deep! Pump!', cls: 'red' }); }
       if (phi < 0.8) G.deepWarned = false;
       G.inBarrel = covered;
       if (covered) { G.barrelRun += dt; G.barrelTime += dt; G.score += dt * (80 + 140 * sstep(0.3, 1.1, phi)); }
@@ -473,31 +1003,32 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
         if (G.barrelRun > 1.0) { ev.push({ type: 'flash', text: 'Barrelled ' + G.barrelRun.toFixed(1) + ' s', cls: 'teal' }); G.score += 150 * G.barrelRun; }
         G.bestRun = Math.max(G.bestRun, G.barrelRun); G.barrelRun = 0;
       }
-      G.score += G.v * cosT * dt;
+      G.score += (G.v / SV) * cosT * dt;
 
       if (lam > 0.3 && G.h > 0.94) {
         // under the curl: riding high scrapes the ceiling and scrubs speed; only launching up into the lip gets you pitched
-        if (G.v * sinT > 11 || G.v < 4) return wipeout(G, ev, 'Pitched over the falls');
+        if (G.v * sinT > 11 * SV || G.v < 4 * SV) return wipeout(G, ev, 'Pitched over the falls');
         if (!G.scraping) ev.push({ type: 'flash', text: 'Scraping the lip: drop down', cls: 'amber' });
         G.scraping = true;
-        G.h = 0.94; G.v *= Math.max(0, 1 - dt * 0.6); G.theta = Math.min(G.theta, 0.1);
+        G.h = 0.94; G.v *= Math.max(0, 1 - dt * 0.6 / SV); G.theta = Math.min(G.theta, 0.1);
       } else {
         G.scraping = false;
       }
       if (G.h >= 1.0 && !(lam > 0.3)) {
-        if (G.v > 9.5) { launchAir(G, dx, dy, dz); ev.push({ type: 'air' }); return ev; }
+        if (G.v > 9.5 * SV) { launchAir(G, dx, dy, dz); ev.push({ type: 'air' }); return ev; }
         return wipeout(G, ev, 'Drifted over the back and lost the wave');
       }
       if (G.h < 0) G.h = 0;
       if (phi > 1.3) return wipeout(G, ev, 'Closed out: the tube collapsed on you');
       if (G.h < 0.12 && phi > 0.55 && lam > 0.9) return wipeout(G, ev, 'The lip landed on you');
-      if (G.h < 0.04 && G.v < 3.5) return wipeout(G, ev, 'Bogged down in the flats');
+      if (G.h < 0.04 && G.v < 3.5 * SV) return wipeout(G, ev, 'Bogged down in the flats');
 
       G.pos.x = fp.x; G.pos.y = fp.y; G.pos.z = fp.z;
       G.nrm.x = fp.nx; G.nrm.y = fp.ny; G.nrm.z = fp.nz;
       G.fwd.x = dx; G.fwd.y = dy; G.fwd.z = dz;
     } else if (G.state === 'air') {
       G.airT += dt;
+      G.carve = steer;
       G.vel.y -= 9.8 * dt;
       G.vel.x += steer * 4 * dt;
       G.pos.x += G.vel.x * dt; G.pos.y += G.vel.y * dt; G.pos.z += G.vel.z * dt;
@@ -507,12 +1038,12 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
       facePoint(hL, G.z, G.t, sp);
       G.H = sp.H; G.phi = sp.phi; G.lam = sp.lam;
       if (G.airT > 0.15 && G.pos.y <= sp.y + 0.05) {
-        if (G.pos.x < sp.x - 0.5 || hL >= 0.999) return wipeout(G, ev, 'Flew over the back and lost the wave');
+        if (G.pos.x < sp.x - 0.5 * S || hL >= 0.999) return wipeout(G, ev, 'Flew over the back and lost the wave');
         G.h = hL; G.state = 'riding'; G.theta = 0; G.airs++;
-        G.v = Math.max(6, Math.hypot(G.vel.x, G.vel.z) * 0.8);
+        G.v = Math.max(6 * SV, Math.hypot(G.vel.x, G.vel.z) * 0.8);
         G.score += 150; ev.push({ type: 'flash', text: 'Air +150', cls: 'amber' }); ev.push({ type: 'landed' });
         G.nrm.x = sp.nx; G.nrm.y = sp.ny; G.nrm.z = sp.nz; G.fwd.x = 0; G.fwd.y = 0; G.fwd.z = 1;
-      } else if (G.airT > 4) {
+      } else if (G.airT > 4 * SV) {
         return wipeout(G, ev, 'Lost the wave');
       }
     } else if (G.state === 'wipeout') {
@@ -525,7 +1056,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
         G.pos.x += G.vel.x * dt; G.pos.y += G.vel.y * dt; G.pos.z += G.vel.z * dt;
         G.spin += dt * 7;
         if (G.wipeT > 0.25 && G.pos.y <= sp.y + 0.2) {
-          G.inWater = true; G.vel.x = 7; G.vel.y = 0; G.vel.z *= 0.3;
+          G.inWater = true; G.vel.x = 7 * SV; G.vel.y = 0; G.vel.z *= 0.3;
           ev.push({ type: 'splash' });
         }
       } else {
@@ -536,7 +1067,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
         G.spin += dt * 1.5;
       }
       G.z = G.pos.z; G.H = sp.H; G.phi = sp.phi; G.lam = sp.lam;
-      if (G.wipeT > 3.6) { G.state = 'over'; ev.push({ type: 'over' }); }
+      if (G.wipeT > 4.2) { G.state = 'over'; ev.push({ type: 'over' }); }
     }
     return ev;
   }
@@ -545,18 +1076,18 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     G.state = 'air'; G.airT = 0;
     facePoint(1.0, G.z, G.t, fp);
     G.pos.x = fp.x; G.pos.y = fp.y; G.pos.z = fp.z;
-    G.vel.x = dx * G.v; G.vel.y = dy * G.v + 2.5; G.vel.z = dz * G.v;
+    G.vel.x = dx * G.v; G.vel.y = dy * G.v + 2.5 * SV; G.vel.z = dz * G.v;
     G.spin = 0;
   }
   function wipeout(G, ev, reason) {
     G.state = 'wipeout'; G.wipeT = 0; G.reason = reason; G.inWater = false;
-    G.vel.x = 4 + Math.random() * 4; G.vel.y = 3 + Math.random() * 3; G.vel.z = G.v * 0.4;
+    G.vel.x = (4 + Math.random() * 4) * SV; G.vel.y = (3 + Math.random() * 3) * SV; G.vel.z = G.v * 0.4;
     G.bestRun = Math.max(G.bestRun, G.barrelRun);
     ev.push({ type: 'wipeout', reason });
     return ev;
   }
 
-  return { createState, reset, step };
+  return { createState, reset, step, THETA_MAX };
 });
 
 </script>
@@ -564,17 +1095,18 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
 (function () {
   'use strict';
   const WM = window.WaveModel;
-  const { W, facePoint, surfacePoint, clamp, mix, sstep, DEG } = WM;
+  const { W, S, SV, facePoint, surfacePoint, clamp, mix, sstep, DEG } = WM;
   const SH = window.SHADERS;
   const $ = (id) => document.getElementById(id);
+  const reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   // ------------------------------------------------------------ device / quality
   const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
   const smallScreen = Math.min(window.innerWidth, window.innerHeight) < 820;
   const isMobile = isTouch && smallScreen;
   const QUALITY = {
-    low: { dpr: 1.25, ns: 120, nz: 220, parts: 0.6 },
-    high: { dpr: 1.5, ns: 170, nz: 320, parts: 1.0 }
+    low: { dpr: 1.25, ns: 140, nz: 300, parts: 0.6 },
+    high: { dpr: 1.5, ns: 200, nz: 420, parts: 1.0 }
   };
   let quality = isMobile ? 'low' : 'high';
   try { const q = localStorage.getItem('tsunami.quality'); if (q === 'low' || q === 'high') quality = q; } catch (e) { /* storage may be unavailable */ }
@@ -587,7 +1119,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Qc.dpr));
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.3, 5000);
+  const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 40000);
   scene.add(camera);
 
   const sunDir = new THREE.Vector3(-0.35, 0.42, 0.84).normalize();
@@ -595,7 +1127,8 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
   const skyZenith = new THREE.Vector3(0.14, 0.38, 0.74);
   const skyHorizon = new THREE.Vector3(0.80, 0.87, 0.93);
   const fogCol = new THREE.Vector3(0.76, 0.84, 0.91);
-  const fogNear = 220, fogFar = 1100;
+  // fog starts further out than before so the whole 150-260 m face reads, but still hazes the far shoulder (aerial perspective sells the size)
+  const fogNear = 420, fogFar = 5200;
   renderer.setClearColor(new THREE.Color(fogCol.x, fogCol.y, fogCol.z), 1);
 
   const lightUniforms = () => ({
@@ -611,15 +1144,15 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
 
   // sky dome
   const skyMat = new THREE.ShaderMaterial({ vertexShader: SH.skyVert, fragmentShader: SH.skyFrag, uniforms: lightUniforms(), side: THREE.BackSide, depthWrite: false });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(3000, 40, 20), skyMat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(20000, 40, 20), skyMat);
   sky.frustumCulled = false;
   scene.add(sky);
 
   // distant ocean
   const oceanMat = new THREE.ShaderMaterial({ vertexShader: SH.oceanVert, fragmentShader: SH.oceanFrag, uniforms: lightUniforms() });
-  const ocean = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000, 1, 1), oceanMat);
+  const ocean = new THREE.Mesh(new THREE.PlaneGeometry(80000, 80000, 1, 1), oceanMat);
   ocean.rotation.x = -Math.PI / 2;
-  ocean.position.y = -0.45;
+  ocean.position.y = -0.45 * S;
   ocean.frustumCulled = false;
   scene.add(ocean);
 
@@ -633,7 +1166,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
   let waveMesh = null;
   const waveUniforms = Object.assign(lightUniforms(), {
     uH: { value: W.H }, uZBreak: { value: W.zBreak }, uLT: { value: W.LT }, uLF: { value: W.LF }, uLS: { value: W.LS },
-    uDF: { value: W.DF }, uDB: { value: W.DB }, uZCenter: { value: 0 }, uFlow: { value: 9.5 }
+    uDF: { value: W.DF }, uDB: { value: W.DB }, uZCenter: { value: 0 }, uFlow: { value: 9.5 }, uS: { value: S }
   });
   const waveMat = new THREE.ShaderMaterial({ vertexShader: SH.waveVert, fragmentShader: SH.waveFrag, uniforms: waveUniforms, side: THREE.DoubleSide });
   function buildWave() {
@@ -644,8 +1177,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     for (let j = 0; j <= nz; j++) {
       const zl = (j / nz) * 2 - 1;
       for (let i = 0; i <= ns; i++) {
-        // concentrate rows on the face and the lip (s in 0.14..0.74)
-        let s = i / ns;
+        const s = i / ns;
         pos[k++] = s; pos[k++] = zl; pos[k++] = 0;
       }
     }
@@ -663,6 +1195,66 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     scene.add(waveMesh);
   }
   buildWave();
+
+  // ------------------------------------------------------------ scale references
+  // A hazy coastal city on the horizon the wave is running at, and a flock of
+  // seabirds working the face: both are tiny next to the wave, which is the point.
+  const city = new THREE.Group();
+  (function buildCity() {
+    const n = 520;
+    const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false });
+    const inst = new THREE.InstancedMesh(geo, mat, n);
+    const m = new THREE.Matrix4(), c = new THREE.Color(), haze = new THREE.Color(fogCol.x, fogCol.y, fogCol.z);
+    let seed = 7;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+    for (let i = 0; i < n; i++) {
+      const z = -8000 + rnd() * 40000;
+      const downtown = Math.exp(-Math.pow(((z % 9000) + 9000) % 9000 / 1400 - 3.2, 2)); // a cluster of towers every 9 km
+      const h = 18 + rnd() * 70 + downtown * rnd() * 240;
+      const w = 25 + rnd() * 55, dpt = 25 + rnd() * 55;
+      m.makeScale(w, h, dpt); m.setPosition(rnd() * 900, -2, z);
+      inst.setMatrixAt(i, m);
+      c.setRGB(0.18 + rnd() * 0.08, 0.27 + rnd() * 0.06, 0.34 + rnd() * 0.06).lerp(haze, 0.55 + rnd() * 0.1);
+      inst.setColorAt(i, c);
+    }
+    inst.frustumCulled = false;
+    city.add(inst);
+    scene.add(city);
+  })();
+
+  const birds = [];
+  (function buildBirds() {
+    const mat = new THREE.MeshBasicMaterial({ color: 0x1b262d, side: THREE.DoubleSide });
+    const wing = new THREE.BufferGeometry();
+    wing.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0.22, 0, 0, -0.18, 0.9, 0, -0.12]), 3));
+    const body = new THREE.BoxGeometry(0.12, 0.1, 0.55);
+    for (let i = 0; i < 18; i++) {
+      const g = new THREE.Group();
+      const wl = new THREE.Mesh(wing, mat), wr = new THREE.Mesh(wing, mat);
+      wr.scale.x = -1;
+      g.add(wl, wr, new THREE.Mesh(body, mat));
+      g.scale.setScalar(1.1 + Math.random() * 0.5);
+      scene.add(g);
+      birds.push({ g, wl, wr, z: (Math.random() - 0.3) * 500, fy: 0.35 + Math.random() * 0.7, out: 25 + Math.random() * 120, ph: Math.random() * 6.28, rate: 7 + Math.random() * 3, wob: Math.random() * 6.28 });
+    }
+  })();
+  const bp = {};
+  function updateBirds(dt) {
+    const H = G.H || W.H;
+    for (const b of birds) {
+      b.z += (G.v * (G.state === 'riding' ? 0.97 : 0.4) + 4 * Math.sin(b.wob + G.t * 0.3)) * dt;
+      if (b.z < G.z - 260) b.z += 700; else if (b.z > G.z + 520) b.z -= 700;
+      const hFace = clamp(b.fy * 0.9, 0, 0.9);
+      facePoint(hFace, b.z, G.t, bp);
+      const y = Math.max(bp.y, 0) + 8 + 6 * Math.sin(b.wob + G.t * 0.5) + (b.fy > 0.9 ? (b.fy - 0.9) * H : 0);
+      b.g.position.set(bp.x + b.out, y, b.z);
+      b.g.rotation.set(0, 0, 0.15 * Math.sin(b.wob + G.t * 0.4));
+      b.ph += dt * b.rate * (Math.sin(G.t * 0.7 + b.wob) > 0.6 ? 0.15 : 1); // flap, then glide
+      const flap = 0.55 * Math.sin(b.ph);
+      b.wl.rotation.z = flap; b.wr.rotation.z = -flap;
+    }
+  }
 
   // ------------------------------------------------------------ spray particles
   class Spray {
@@ -712,11 +1304,14 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     setScale(s) { this.mat.uniforms.uScale.value = s; }
   }
   const pc = Qc.parts;
-  const lipMist = new Spray(Math.round(900 * pc), 0xf4f9ff, 1.2, 0.985, 0.8);
-  const tipSpray = new Spray(Math.round(500 * pc), 0xeef6ff, 7.0, 0.992, 0.8);
-  const splash = new Spray(Math.round(600 * pc), 0xf6fbff, 6.5, 0.985, 1.2);
-  const boardSpray = new Spray(Math.round(900 * pc), 0xf2f8ff, 9.8, 0.985, 0.25);
-  const sprays = [lipMist, tipSpray, splash, boardSpray];
+  // wave-scale sprays use Froude-scaled drag (closer to 1) so the bigger, slower plumes carry further
+  const lipMist = new Spray(Math.round(1600 * pc), 0xf4f9ff, 1.2, 0.9939, 0.8 * SV);
+  const tipSpray = new Spray(Math.round(900 * pc), 0xeef6ff, 7.0, 0.9967, 0.8 * SV);
+  const splash = new Spray(Math.round(1200 * pc), 0xf6fbff, 6.5, 0.9939, 1.2 * SV);
+  const boardSpray = new Spray(Math.round(1100 * pc), 0xf2f8ff, 9.8, 0.985, 0.3);
+  // drifting mist hanging in the air along your line: it whips past the lens, which is what makes 150 km/h feel fast
+  const airMist = new Spray(Math.round(500 * pc), 0xf0f7ff, 0.2, 0.995, 0.15);
+  const sprays = [lipMist, tipSpray, splash, boardSpray, airMist];
 
   // ------------------------------------------------------------ surfer
   function makeCapsule(r, len, seg) {
@@ -796,20 +1391,22 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     scene.add(root);
   })();
 
-  const poseState = { crouch: 0.3, lean: 0, drag: 0, nose: 0, bob: 0 };
+  const poseState = { crouch: 0.3, lean: 0, drag: 0, nose: 0, bob: 0, pump: 0, stall: 0 };
   // animation layer: time-based cycles blended on top of the physics-driven pose
   const anim = { t: 0, phase: 0, snap: 0, snapDir: 1, lastSteer: 0, popup: 0, claim: 0, tuck: 0, flail: 0, speed: 0 };
   function poseSurfer(dt, p) {
-    // p: { crouch 0..1, lean -1..1 (+ toward the wall), drag 0..1 (hand in the face), nose -1..1, speed m/s, mode }
+    // p: { crouch 0..1, lean -1..1 (+ toward the wall), drag 0..1 (hand in the face), nose -1..1, speed (original-scale m/s), pump 0..1, stall 0..1, mode }
     const k = 1 - Math.exp(-dt * 7);
     poseState.crouch += (p.crouch - poseState.crouch) * k;
     poseState.lean += (p.lean - poseState.lean) * k;
     poseState.drag += (p.drag - poseState.drag) * k;
     poseState.nose += (p.nose - poseState.nose) * k;
+    poseState.pump += ((p.pump || 0) - poseState.pump) * k;
+    poseState.stall += ((p.stall || 0) - poseState.stall) * k;
     anim.t += dt;
     anim.speed += ((p.speed || 0) - anim.speed) * k;
-    // pumping cycle: faster with speed, stronger while carving
-    anim.phase += dt * (2.0 + anim.speed * 0.17);
+    // pumping cycle: faster with speed, stronger while carving, big and quick when pumping for speed
+    anim.phase += dt * (2.0 + anim.speed * 0.17 + 4.5 * poseState.pump);
     const pump = Math.sin(anim.phase);
     const pump2 = Math.sin(anim.phase * 2.0 + 0.7);
     // carve snap when the steer flips sign
@@ -824,14 +1421,15 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     const tuck = p.mode === 'air' ? 1 : 0;
     const flail = p.mode === 'wipe' ? 1 : 0;
     const snap = anim.snap;
+    const pk = poseState.pump, sk = poseState.stall;
 
-    const c = clamp(poseState.crouch + 0.07 * pump * (0.4 + 0.6 * sstep(8, 18, anim.speed)) + 0.12 * snap + 0.9 * popup + 0.5 * tuck, 0, 1);
+    const c = clamp(poseState.crouch + (0.07 + 0.2 * pk) * pump * (0.4 + 0.6 * Math.max(sstep(8, 18, anim.speed), pk)) + 0.12 * snap + 0.9 * popup + 0.5 * tuck - 0.15 * sk, 0, 1);
     const lean = poseState.lean, drag = poseState.drag * (1 - popup);
     const bob = Math.sin(anim.t * 2.1) * 0.012;
     const tA = 0.18 + 0.85 * c, kA = 0.36 + 1.45 * c;
     const splay = 0.36;
     const hipY = (0.44 * Math.cos(tA) + 0.43 * Math.cos(kA - tA)) * Math.cos(splay) + 0.07 + bob;
-    surfer.hips.position.set(0.05 * snap * anim.snapDir, hipY, 0.04 + 0.12 * lean + 0.1 * popup);
+    surfer.hips.position.set(0.05 * snap * anim.snapDir - 0.14 * sk, hipY, 0.04 + 0.12 * lean + 0.1 * popup);
     surfer.hips.rotation.x = 0.1 + 0.25 * lean + 0.3 * popup;
     for (const [lg, side] of [[surfer.legF, 1], [surfer.legB, -1]]) {
       lg.hip.rotation.z = side * splay + flail * 0.5 * Math.sin(anim.t * 13 + side);
@@ -841,16 +1439,17 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
       lg.ankle.rotation.x = -(kA - tA - extra) - surfer.hips.rotation.x;
       lg.ankle.rotation.z = -side * splay;
     }
-    // torso: forward with speed and crouch, twists into turns, snaps on carves, straightens for a claim, folds in a wipeout
+    // torso: forward with speed and crouch, twists into turns, snaps on carves, straightens for a claim, folds in a wipeout, sits back on a stall
     surfer.torso.rotation.x = 0.12 + 0.5 * c + 0.3 * lean + 0.04 * pump2 + 0.9 * popup - 0.35 * claim + flail * 0.5 * Math.sin(anim.t * 9);
-    surfer.torso.rotation.z = -0.12 * poseState.nose + 0.15 * lean + 0.25 * snap * anim.snapDir + flail * 0.4 * Math.sin(anim.t * 7);
+    surfer.torso.rotation.z = -0.12 * poseState.nose + 0.15 * lean + 0.25 * snap * anim.snapDir + flail * 0.4 * Math.sin(anim.t * 7) - 0.4 * sk;
     surfer.torso.rotation.y = 0.35 * lean + 0.6 * snap * anim.snapDir + flail * 0.5 * Math.sin(anim.t * 8);
     // head: looks down the line, up at the lip in the tube, up at the sky for a claim
     surfer.head.rotation.y = 0.95 - 0.3 * lean - 0.4 * drag;
     surfer.head.rotation.x = -0.35 - 0.3 * c - 0.4 * drag - 0.5 * popup - 0.3 * claim;
-    // arms: front arm leads along the board; back arm balances, drags in the face, swings on a snap
-    let fZ = 1.1 - 0.3 * lean + 0.12 * pump, fX = -0.5 - 0.3 * c - 0.1 * pump2, fE = -0.35;
-    let bZ = mix(-(1.0 - 0.4 * c) - 0.1 * pump, -0.5, drag), bX = mix(-0.35 - 0.3 * lean, -0.95, drag) - 0.7 * snap, bE = mix(-0.3, -0.4, drag) - 0.4 * snap;
+    // arms: front arm leads along the board; back arm balances, drags in the face, swings on a snap, pumps with the legs
+    let fZ = 1.1 - 0.3 * lean + (0.12 + 0.3 * pk) * pump, fX = -0.5 - 0.3 * c - 0.1 * pump2, fE = -0.35;
+    let bZ = mix(-(1.0 - 0.4 * c) - (0.1 + 0.3 * pk) * pump, -0.5, drag), bX = mix(-0.35 - 0.3 * lean, -0.95, drag) - 0.7 * snap, bE = mix(-0.3, -0.4, drag) - 0.4 * snap;
+    if (sk > 0) { fZ = mix(fZ, 1.6, sk); bZ = mix(bZ, -1.6, sk); }
     if (popup > 0) { fZ = mix(fZ, 0.35, popup); fX = mix(fX, -0.9, popup); bZ = mix(bZ, -0.35, popup); bX = mix(bX, -0.9, popup); fE = mix(fE, -0.3, popup); bE = mix(bE, -0.3, popup); }
     if (claim > 0) { fZ = mix(fZ, 2.75, claim); fX = mix(fX, -0.2, claim); bZ = mix(bZ, -2.75, claim); bX = mix(bX, -0.2, claim); fE = mix(fE, -0.2, claim); bE = mix(bE, -0.2, claim); }
     if (tuck > 0) { fZ = mix(fZ, 0.25, tuck); fX = mix(fX, 0.7, tuck); bZ = mix(bZ, -1.3, tuck); bX = mix(bX, -0.6, tuck); fE = mix(fE, -0.6, tuck); }
@@ -866,9 +1465,9 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
   const SP = window.SurfPhysics;
   const G = SP.createState();
   G.mode = 'title';          // title | play | over
-  const UI = { camMode: 0, best: 0, hudT: 0, flashT: 0, steer: 0 };
+  const UI = { camMode: 0, best: 0, hudT: 0, flashT: 0, steer: 0, thr: 0 };
   try { UI.best = parseInt(localStorage.getItem('tsunami.best') || '0', 10) || 0; } catch (e) { UI.best = 0; }
-  const fp = {};
+  try { const cm = parseInt(localStorage.getItem('tsunami.cam') || '0', 10); if (cm >= 0 && cm < 6) UI.camMode = cm; } catch (e) { /* ignore */ }
 
   function resetRide() {
     SP.reset(G);
@@ -877,7 +1476,8 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     surfer.root.visible = true;
     surfer.board.position.set(0, 0.095, 0); surfer.board.rotation.set(Math.PI / 2, 0, 0);
     anim.popup = 1.3; anim.claim = 0; anim.snap = 0;
-    camInit = false;
+    // open on a short establishing shot so you see what you just paddled into
+    cam.init = false; cam.shot = ''; setShot('heli'); cam.shotT = SHOT_LEN.heli - 3;
     hideOverlays();
     $('hud').classList.add('on');
     showHint();
@@ -891,13 +1491,13 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
   function handleEvents(ev) {
     for (const e of ev) {
       if (e.type === 'flash') { if (G.mode === 'play') flash(e.text, e.cls); if (e.text.indexOf('Barrelled') === 0 && parseFloat(e.text.slice(10)) >= 2.5) anim.claim = 1.6; }
-      else if (e.type === 'splash') { for (let i = 0; i < 120; i++) splash.emit(G.pos.x, G.pos.y, G.pos.z, (Math.random() - 0.5) * 10, 2 + Math.random() * 10, (Math.random() - 0.5) * 10, 1.2 + Math.random() * 1.6, 1.0 + Math.random() * 3.0, 0.9); }
+      else if (e.type === 'splash') { for (let i = 0; i < 160; i++) splash.emit(G.pos.x, G.pos.y, G.pos.z, (Math.random() - 0.5) * 16, 3 + Math.random() * 16, (Math.random() - 0.5) * 16, 1.4 + Math.random() * 2, 1.5 + Math.random() * 4.5, 0.9); }
       else if (e.type === 'wipeout') {
-        for (let i = 0; i < 90; i++) splash.emit(G.pos.x, G.pos.y, G.pos.z, (Math.random() - 0.5) * 8, Math.random() * 9, (Math.random() - 0.5) * 8, 1 + Math.random() * 1.5, 0.8 + Math.random() * 2.5, 0.9);
+        for (let i = 0; i < 120; i++) splash.emit(G.pos.x, G.pos.y, G.pos.z, (Math.random() - 0.5) * 12, Math.random() * 14, (Math.random() - 0.5) * 12, 1.2 + Math.random() * 1.8, 1.2 + Math.random() * 3.5, 0.9);
         if (G.mode === 'play') flash('Wipeout', 'red');
       } else if (e.type === 'over') {
         if (G.mode === 'play') endRide();
-        else { SP.reset(G); W.zBreak = G.z - 90; surfer.root.visible = true; surfer.board.position.set(0, 0.095, 0); surfer.board.rotation.set(Math.PI / 2, 0, 0); }
+        else { SP.reset(G); W.zBreak = G.z - 90 * S; surfer.root.visible = true; surfer.board.position.set(0, 0.095, 0); surfer.board.rotation.set(Math.PI / 2, 0, 0); }
       }
     }
   }
@@ -908,37 +1508,40 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     if (s > UI.best) { UI.best = s; try { localStorage.setItem('tsunami.best', String(s)); } catch (e) { /* ignore */ } }
     $('over-reason').textContent = G.reason + '.';
     $('over-score').textContent = s.toLocaleString();
-    $('over-stats').textContent = Math.round(G.dist) + ' m ridden, ' + G.barrelTime.toFixed(1) + ' s in the tube' + (G.bestRun >= 1 ? ' (longest ' + G.bestRun.toFixed(1) + ' s)' : '') + (G.airs ? ', ' + G.airs + (G.airs === 1 ? ' air' : ' airs') : '') + '. Best ' + UI.best.toLocaleString() + '.';
+    $('over-stats').textContent = Math.round(G.dist).toLocaleString() + ' m ridden, top speed ' + Math.round(G.topSpeed * 3.6) + ' km/h, ' + G.barrelTime.toFixed(1) + ' s in the tube' + (G.bestRun >= 1 ? ' (longest ' + G.bestRun.toFixed(1) + ' s)' : '') + (G.airs ? ', ' + G.airs + (G.airs === 1 ? ' air' : ' airs') : '') + '. Best ' + UI.best.toLocaleString() + '.';
     $('over').classList.add('on');
     $('hud').classList.remove('on');
   }
 
   // ------------------------------------------------------------ surfer placement + spray
   const mBasis = new THREE.Matrix4(), F = new THREE.Vector3(), N = new THREE.Vector3(), R = new THREE.Vector3(), N2 = new THREE.Vector3(), R2 = new THREE.Vector3(), tailP = new THREE.Vector3(), tmpV = new THREE.Vector3();
-  let sprayAcc = 0, foamAcc = 0;
+  let sprayAcc = 0, foamAcc = 0, mistAcc = 0;
   function placeSurfer(dt) {
     const root = surfer.root;
-    const steer = UI.steer;
+    const carve = G.carve || 0;
     if (G.state === 'riding') {
       root.position.set(G.pos.x, G.pos.y, G.pos.z);
       F.set(G.fwd.x, G.fwd.y, G.fwd.z); N.set(G.nrm.x, G.nrm.y, G.nrm.z);
       R.crossVectors(N, F).normalize();            // right-handed: R = N x F points to the trough side
-      const roll = steer * 0.42;                    // climbing dips the wall-side rail
+      // rail roll: the line you hold plus how hard you are carving right now (climbing dips the wall-side rail)
+      const roll = clamp(0.2 * G.theta / SP.THETA_MAX + 0.4 * carve, -0.6, 0.6);
       R2.copy(R).multiplyScalar(Math.cos(roll)).addScaledVector(N, Math.sin(roll));
       N2.copy(N).multiplyScalar(Math.cos(roll)).addScaledVector(R, -Math.sin(roll));
       mBasis.makeBasis(R2, N2, F);
       root.quaternion.setFromRotationMatrix(mBasis);
-      const crouch = clamp(0.25 + 0.45 * sstep(10, 22, G.v) + (G.inBarrel ? 0.45 : 0) + 0.2 * Math.max(0, -steer), 0, 1);
-      poseSurfer(dt, { crouch, lean: steer, drag: G.inBarrel ? 1 : 0, nose: clamp((G.v - 14) / 10, -1, 1), speed: G.v, mode: 'ride' });
-      // board spray from the tail
+      const vn = G.v / SV; // speed on the original scale, for the pose and spray tuning
+      const crouch = clamp(0.25 + 0.45 * sstep(10, 22, vn) + (G.inBarrel ? 0.45 : 0) + 0.2 * Math.max(0, -carve), 0, 1);
+      poseSurfer(dt, { crouch, lean: clamp(carve + 0.5 * G.theta / SP.THETA_MAX, -1, 1), drag: G.inBarrel ? 1 : 0, nose: clamp((vn - 14) / 10, -1, 1), speed: vn, pump: G.pump, stall: G.stall, mode: 'ride' });
+      // board spray from the tail: carving, speed and stalling all throw more
       tailP.copy(root.position).addScaledVector(F, -1.2).addScaledVector(N, 0.05);
-      const rate = 14 + 140 * Math.abs(steer) * sstep(6, 16, G.v) + 25 * sstep(14, 24, G.v);
+      const rate = 14 + 140 * Math.abs(carve) * sstep(6, 16, vn) + 30 * sstep(14, 24, vn) + 160 * G.stall;
       sprayAcc += rate * dt;
       while (sprayAcc > 1) {
         sprayAcc -= 1;
-        const side = steer * (3 + 4 * Math.abs(steer)) + (Math.random() - 0.5) * 2;
-        tmpV.copy(R).multiplyScalar(side).addScaledVector(N, 1.5 + Math.random() * 3 + 2 * Math.abs(steer)).addScaledVector(F, -1 - Math.random() * 2);
-        boardSpray.emit(tailP.x + (Math.random() - 0.5) * 0.5, tailP.y, tailP.z + (Math.random() - 0.5) * 0.5, tmpV.x, tmpV.y, tmpV.z, 0.4 + Math.random() * 0.5, 0.12 + Math.random() * 0.25 + 0.15 * Math.abs(steer), 0.75);
+        const side = carve * (3 + 4 * Math.abs(carve)) + (Math.random() - 0.5) * 2;
+        const kick = 1.3 + 0.6 * G.stall;
+        tmpV.copy(R).multiplyScalar(side * kick).addScaledVector(N, (1.5 + Math.random() * 3 + 2 * Math.abs(carve) + 3 * G.stall) * kick).addScaledVector(F, (-1 - Math.random() * 2) * kick);
+        boardSpray.emit(tailP.x + (Math.random() - 0.5) * 0.5, tailP.y, tailP.z + (Math.random() - 0.5) * 0.5, tmpV.x, tmpV.y, tmpV.z, 0.5 + Math.random() * 0.7, 0.16 + Math.random() * 0.3 + 0.2 * Math.abs(carve) + 0.2 * G.stall, 0.75);
       }
     } else if (G.state === 'air') {
       root.position.set(G.pos.x, G.pos.y, G.pos.z);
@@ -947,7 +1550,7 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
       mBasis.makeBasis(R, N, F);
       root.quaternion.setFromRotationMatrix(mBasis);
       root.rotateY(G.spin);
-      poseSurfer(dt, { crouch: 0.75, lean: 0.3, drag: 0, nose: 0, speed: G.v, mode: 'air' });
+      poseSurfer(dt, { crouch: 0.75, lean: 0.3, drag: 0, nose: 0, speed: G.v / SV, mode: 'air' });
     } else if (G.state === 'wipeout') {
       root.position.set(G.pos.x, G.pos.y, G.pos.z);
       if (G.inWater) root.rotation.set(1.2 + 0.4 * Math.sin(G.spin), G.spin * 0.6, 0.5 * Math.sin(G.spin * 0.7));
@@ -957,148 +1560,265 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
       surfer.board.position.set(1.5 * bt, 0.095 + 3.0 * bt - 1.2 * bt * bt, 2.0 * bt);
       surfer.board.rotation.set(Math.PI / 2 + 4 * bt, 3 * bt, 0);
       if (G.inWater) {
-        foamAcc += dt * 40;
-        while (foamAcc > 1) { foamAcc -= 1; splash.emit(G.pos.x + (Math.random() - 0.5) * 3, G.pos.y + 0.3, G.pos.z + (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 2 + 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 2, 1.2 + Math.random() * 1.2, 1.0 + Math.random() * 2.0, 0.7); }
+        foamAcc += dt * 50;
+        while (foamAcc > 1) { foamAcc -= 1; splash.emit(G.pos.x + (Math.random() - 0.5) * 5, G.pos.y + 0.3, G.pos.z + (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 3 + 5, 1 + Math.random() * 3, (Math.random() - 0.5) * 3, 1.4 + Math.random() * 1.4, 1.5 + Math.random() * 3.0, 0.7); }
       }
     } else if (G.state === 'over') {
       root.visible = false;
     }
+    // air mist along the line ahead of the board, so the scenery has something to rush past
+    if (G.state === 'riding' && !reducedMotion) {
+      mistAcc += (10 + G.v * 1.1) * dt;
+      while (mistAcc > 1) {
+        mistAcc -= 1;
+        const lead = G.v * (0.8 + Math.random() * 1.6);
+        const h = clamp(G.h + (Math.random() - 0.5) * 0.25, 0.02, 0.9);
+        facePoint(h, G.pos.z + lead, G.t, fp);
+        const off = 1.5 + Math.random() * 14;
+        airMist.emit(fp.x + fp.nx * off, fp.y + fp.ny * off + Math.random() * 3, fp.z + (Math.random() - 0.5) * 6, -1 - Math.random() * 2, 0.4 + Math.random(), (Math.random() - 0.5) * 2, 1.8 + Math.random() * 1.6, 0.25 + Math.random() * 0.55, 0.45);
+      }
+    }
   }
+  const fp = {};
 
-  // wave spray: feathering mist off the crest, droplets off the lip tip, and the impact splash
+  // wave spray: feathering mist off the crest, droplets off the lip tip, and the impact splash (all scaled up with the wave)
   const sp = {};
   function waveSpray(dt) {
     const zb = W.zBreak, LT = W.LT;
     // feather / mist along the crest around the break
-    let n = (isMobile ? 55 : 90) * dt;
+    let n = (isMobile ? 70 : 120) * dt;
     for (let i = 0; i < n; i++) {
       if (Math.random() > n - i) break;
       const z = zb + (Math.random() * 1.9 - 1.1) * LT;
       surfacePoint(0.66, z, G.t, sp);
-      lipMist.emit(sp.x + Math.random(), sp.y + 0.5, z, -5 - Math.random() * 7, 2 + Math.random() * 5, (Math.random() - 0.5) * 3, 1.6 + Math.random() * 1.6, 1.4 + Math.random() * 2.2, 0.45);
+      lipMist.emit(sp.x + Math.random() * S, sp.y + 0.5 * S, z, (-5 - Math.random() * 7) * SV, (2 + Math.random() * 5) * SV, (Math.random() - 0.5) * 3 * SV, (1.6 + Math.random() * 1.6) * SV, (1.4 + Math.random() * 2.2) * S * 0.8, 0.45);
     }
-    n = (isMobile ? 35 : 60) * dt;
+    n = (isMobile ? 50 : 80) * dt;
     for (let i = 0; i < n; i++) {
       if (Math.random() > n - i) break;
       const z = zb - Math.random() * 0.95 * LT;
       surfacePoint(0.60, z, G.t, sp);
-      tipSpray.emit(sp.x, sp.y, z, 2 + Math.random() * 5, -1 + Math.random() * 4, (Math.random() - 0.5) * 4, 0.8 + Math.random() * 0.8, 0.8 + Math.random() * 1.2, 0.7);
+      tipSpray.emit(sp.x, sp.y, z, (2 + Math.random() * 5) * SV, (-1 + Math.random() * 4) * SV, (Math.random() - 0.5) * 4 * SV, (0.8 + Math.random() * 0.8) * SV, (0.8 + Math.random() * 1.2) * S * 0.7, 0.7);
     }
     // lip landing explosion around phi in [0.85, 1.15]
-    n = (isMobile ? 40 : 70) * dt;
+    n = (isMobile ? 55 : 90) * dt;
     for (let i = 0; i < n; i++) {
       if (Math.random() > n - i) break;
       const z = zb - (0.85 + Math.random() * 0.3) * LT;
       surfacePoint(0.60, z, G.t, sp);
-      splash.emit(sp.x + (Math.random() - 0.5) * 4, sp.y, z + (Math.random() - 0.5) * 3, (Math.random() - 0.3) * 8, 7 + Math.random() * 14, (Math.random() - 0.5) * 6, 1.8 + Math.random() * 1.6, 1.8 + Math.random() * 3.2, 0.75);
+      splash.emit(sp.x + (Math.random() - 0.5) * 4 * S, sp.y, z + (Math.random() - 0.5) * 3 * S, (Math.random() - 0.3) * 8 * SV, (7 + Math.random() * 14) * SV, (Math.random() - 0.5) * 6 * SV, (1.8 + Math.random() * 1.6) * SV, (1.8 + Math.random() * 3.2) * S * 0.8, 0.75);
     }
   }
 
   // ------------------------------------------------------------ camera
-  let camInit = false;
+  // A small camera director. Manual modes lock one shot; "auto" cuts between
+  // a speed-reactive chase cam (where you play), a helicopter shot that shows
+  // the whole face, a low shot from the trough looking up the wall, a fixed
+  // fly-by the surfer screams past, and a tube cam while you are barrelled.
+  const CAM_MODES = ['auto', 'chase', 'close', 'heli', 'trough', 'channel'];
+  const cam = { shot: 'chase', shotT: 0, nextCut: 8, rot: 0, init: false, cut: false, roll: 0, t: 0, fov: 66, flyP: new THREE.Vector3(), outOfTube: 0 };
+  const SHOT_LEN = { heli: 5.5, trough: 4.5, flyby: 6, tube: 99 };
+  const CINE = { heli: 1, trough: 1, flyby: 1, wipe: 1 };
   const camPos = new THREE.Vector3(), camTgt = new THREE.Vector3(), camWantP = new THREE.Vector3(), camWantT = new THREE.Vector3(), camUp = new THREE.Vector3(0, 1, 0);
-  const cp = {};
-  let camRoll = 0, camCut = false;
+  const cp = {}, cq = {};
+  function setShot(s) {
+    if (cam.shot === s) return;
+    cam.shot = s; cam.shotT = 0; cam.cut = true;
+    if (s === 'flyby') {
+      // plant the camera on the face ahead of where the surfer will be in ~2.5 s, just off the line
+      const lead = clamp(G.v * 2.5, 60, 200);
+      facePoint(clamp(G.h + 0.04, 0.05, 0.8), G.z + lead, G.t, cp);
+      cam.flyP.set(cp.x + cp.nx * 9, cp.y + cp.ny * 9 + 2.5, cp.z + cp.nz * 9);
+    }
+    if (s === 'chase') cam.nextCut = 7 + Math.random() * 4;
+    updateCamLabel();
+  }
+  function direct(dt) {
+    cam.shotT += dt;
+    if (G.state === 'wipeout' || G.state === 'over') return;
+    const s = cam.shot;
+    if (G.state === 'air') { if (s !== 'heli') setShot('heli'); return; }
+    if (G.inBarrel && G.barrelRun > 0.6) { cam.outOfTube = 0; if (s !== 'tube') setShot('tube'); return; }
+    if (s === 'tube') { cam.outOfTube += dt; if (cam.outOfTube > 0.7) setShot('chase'); return; }
+    // danger: give the player the playable view
+    if (G.phi > 0.9 || G.scraping || G.h < 0.05) { if (s !== 'chase' && cam.shotT > 1.2) setShot('chase'); return; }
+    if (s === 'chase') {
+      if (cam.shotT > cam.nextCut) setShot(['heli', 'flyby', 'trough'][cam.rot++ % 3]);
+    } else if (s === 'flyby') {
+      if (G.z > cam.flyP.z + 35 || cam.shotT > SHOT_LEN.flyby) setShot('chase');
+    } else if (cam.shotT > (SHOT_LEN[s] || 5)) setShot('chase');
+  }
+  function updateCamLabel() {
+    const m = CAM_MODES[UI.camMode];
+    const txt = 'Camera: ' + m + (m === 'auto' && G.mode !== 'title' ? ' · ' + cam.shot : '');
+    $('cam-hud').textContent = txt; $('cam').textContent = 'Camera: ' + m;
+  }
+  function cycleCamera() {
+    UI.camMode = (UI.camMode + 1) % CAM_MODES.length;
+    try { localStorage.setItem('tsunami.cam', String(UI.camMode)); } catch (e) { /* ignore */ }
+    const m = CAM_MODES[UI.camMode];
+    if (m === 'auto') setShot('chase'); else setShot(m);
+    updateCamLabel();
+  }
+
   function updateCamera(dt) {
     const portrait = window.innerHeight > window.innerWidth;
-    const mode = UI.camMode; // 0 chase, 1 close, 2 wide, 3 channel
+    const mode = CAM_MODES[UI.camMode];
     const Hn = G.H || W.H;
     const wiping = G.state === 'wipeout' || G.state === 'over';
-    let baseFov;
-    if (mode === 3 || wiping) {
-      // channel view: out in the flat water ahead of the surfer, looking back along the wall at the tube and the lip landing
-      const out = wiping ? (portrait ? 26 : 30) : (portrait ? 36 : 44), up = wiping ? 8 : (portrait ? 11 : 9), ahead = wiping ? 16 : 20;
-      camWantP.set(G.pos.x + out, Math.max(G.pos.y, 4) + up, G.pos.z + ahead);
-      camWantT.set(G.pos.x - 2, G.pos.y + 2 + Hn * 0.1, G.pos.z - (wiping ? 10 : 8));
-      baseFov = portrait ? 72 : 55;
-      if (wiping && !camCut) { camPos.copy(camWantP); camTgt.copy(camWantT); camCut = true; } // hard cut to the replay camera
-      const kP = 1 - Math.exp(-dt * 3), kT = 1 - Math.exp(-dt * 4);
-      if (!camInit) { camPos.copy(camWantP); camTgt.copy(camWantT); camInit = true; }
-      camPos.lerp(camWantP, kP); camTgt.lerp(camWantT, kT);
-      camera.position.copy(camPos); camera.up.copy(camUp); camera.lookAt(camTgt);
-      camRoll = 0;
-      camera.fov = baseFov;
-      camera.updateProjectionMatrix();
-      return;
-    }
-    camCut = false;
-    let back = mode === 1 ? 8 : mode === 2 ? 24 : (portrait ? 10 : 12.5);
-    let lift = mode === 1 ? 4.2 : mode === 2 ? 13 : (portrait ? 5.5 : 6.3);
-    let drop = mode === 2 ? 0.28 : 0.14;
-    if (G.inBarrel && mode !== 2) { back = Math.min(back, 9.5); lift = Math.min(lift, 4.6); drop = 0.12; }
-    // keep the camera ahead of the collapsing section of the tube
-    const phiCam = -((G.z - back) - W.zBreak) / W.LT;
-    if (phiCam > 0.98) back = Math.max(3.5, back - (phiCam - 0.98) * W.LT);
-    const hCam = clamp(G.h - drop, 0.0, 0.62);
-    facePoint(hCam, G.z - back, G.t, cp);
-    camWantP.set(cp.x + cp.nx * lift, cp.y + cp.ny * lift + 0.4, cp.z + cp.nz * lift);
-    const ahead = mode === 2 ? 14 : 9;
+    cam.t += dt;
+    if (wiping) { if (cam.shot !== 'wipe') setShot('wipe'); }
+    else if (cam.shot === 'wipe') setShot(mode === 'auto' ? 'chase' : mode);
+    if (!wiping) { if (mode === 'auto') direct(dt); else if (cam.shot !== mode) setShot(mode); }
+    const shot = cam.shot;
+    const v = G.v, vk = sstep(15, 70, v);      // 0 at cruising speed, 1 flat out
     const lipK = sstep(0.1, 0.5, G.lam || 0);
-    const tilt = Hn * (0.15 + 0.11 * lipK) * (mode === 2 ? 0.7 : 1);
-    camWantT.set(G.pos.x - 1.0, G.pos.y + 1.4 + tilt, G.pos.z + ahead);
-    if (!camInit) { camPos.copy(camWantP); camTgt.copy(camWantT); camInit = true; }
-    const kP = 1 - Math.exp(-dt * 4.5), kT = 1 - Math.exp(-dt * 6);
-    camPos.lerp(camWantP, kP); camTgt.lerp(camWantT, kT);
+    let fov = 66, kP = 4.5, kT = 6, rollK = 0, shakeK = 0.3;
+
+    if (shot === 'wipe' || shot === 'channel') {
+      // channel view: low in the flat water well down the line, looking back along the wall into the tube and the lip landing
+      const w = shot === 'wipe';
+      facePoint(0, G.pos.z, G.t, cp);
+      const out = w ? 30 + 0.1 * Hn : 0.25 * Hn;
+      const up = w ? 6 + 0.08 * Hn : 8 + 0.04 * Hn;
+      const ahead = w ? 40 + 0.35 * Hn : (portrait ? 1.25 : 1.0) * Hn;
+      camWantP.set(Math.max(G.pos.x, cp.x) + out, (w ? Math.max(G.pos.y, 4) : 0) + up, G.pos.z + ahead);
+      camWantT.set(G.pos.x - 2, G.pos.y * (w ? 1 : 0.5) + 2 + Hn * (w ? 0.06 : 0.3), G.pos.z - (w ? 8 : 0.1 * Hn));
+      fov = portrait ? 74 : 58; kP = 3; kT = 4;
+    } else if (shot === 'heli') {
+      // helicopter: hovering out past the trough and well down the line, looking back at the whole face peeling toward it;
+      // the surfer is a speck on the wall (the tag finds them)
+      facePoint(0, G.z + 1.4 * Hn, G.t, cp);
+      camWantP.set(cp.x + (portrait ? 0.75 : 0.55) * Hn, 0.55 * Hn, G.z + (portrait ? 1.8 : 1.4) * Hn);
+      camWantT.set(G.pos.x + 0.1 * Hn, 0.4 * Hn + 0.2 * G.pos.y, G.z - 0.25 * Hn);
+      fov = portrait ? 68 : 52; kP = 1.6; kT = 2.4;
+    } else if (shot === 'trough') {
+      // low in the trough ahead of the surfer, looking up the wall: the face fills the sky
+      facePoint(0, G.z + 75, G.t, cp);
+      camWantP.set(cp.x + 22, 3.5, G.z + 75);
+      camWantT.set(G.pos.x, G.pos.y + 0.2 * Hn, G.pos.z - 10);
+      fov = portrait ? 92 : 80; kP = 2.2; kT = 5;
+    } else if (shot === 'flyby') {
+      // a fixed camera the surfer rips past: nothing sells speed like a pass-by
+      camWantP.copy(cam.flyP);
+      camWantT.set(G.pos.x, G.pos.y + 1.2, G.pos.z + 2);
+      fov = portrait ? 66 : 50; kP = 20; kT = 9; shakeK = 0.15;
+    } else if (shot === 'tube') {
+      // in the tube behind the surfer, looking out toward the opening
+      facePoint(clamp(G.h - 0.03, 0, 0.9), G.z - 11, G.t, cp);
+      camWantP.set(cp.x + cp.nx * 3.2, cp.y + cp.ny * 3.2 + 1.2, cp.z + cp.nz * 3.2);
+      camWantT.set(G.pos.x + 5, G.pos.y + 2.5, G.pos.z + 45);
+      fov = portrait ? 100 : 88; kP = 6; kT = 6; rollK = 1; shakeK = 1.2;
+    } else {
+      // chase / close: pulls back and widens with speed; tilts up to keep the lip and the height of the wall in frame
+      const close = shot === 'close';
+      let back = close ? 6 + 4 * vk : (portrait ? 12 : 14) + 16 * vk;
+      const lift = close ? 2.8 + 1.2 * vk : (portrait ? 6 : 7) + 6 * vk;
+      const dropM = close ? 1.2 : 2.5 + 3 * vk;
+      if (G.inBarrel) { back = Math.min(back, 11); }
+      // keep the camera ahead of the collapsing section of the tube
+      const phiCam = -((G.z - back) - W.zBreak) / W.LT;
+      if (phiCam > 0.98) back = Math.max(4, back - (phiCam - 0.98) * W.LT);
+      const hCam = clamp(G.h - dropM / (1.68 * Hn), 0.0, 0.62);
+      facePoint(hCam, G.z - back, G.t, cp);
+      camWantP.set(cp.x + cp.nx * lift, cp.y + cp.ny * lift + 0.4, cp.z + cp.nz * lift);
+      const ahead = (close ? 8 : 12) + 0.35 * v;
+      const tilt = (close ? 1.5 : 3) + Hn * (0.03 + 0.05 * lipK);
+      camWantT.set(G.pos.x - 1.0, G.pos.y + 1.4 + tilt, G.pos.z + ahead);
+      fov = (portrait ? 84 : 66) + 16 * vk + 8 * lipK + (close ? 6 : 0);
+      rollK = 1; shakeK = 1;
+    }
+
+    if (!cam.init || cam.cut) { camPos.copy(camWantP); camTgt.copy(camWantT); cam.init = true; cam.cut = false; cam.fov = fov; }
+    camPos.lerp(camWantP, 1 - Math.exp(-dt * kP)); camTgt.lerp(camWantT, 1 - Math.exp(-dt * kT));
+    // never under the water
+    surfacePoint(0.1, camPos.z, G.t, cq);
+    if (camPos.x > cq.x - 5 && camPos.y < 1.5) camPos.y = 1.5;
     camera.position.copy(camPos);
     camera.up.copy(camUp);
     camera.lookAt(camTgt);
-    camRoll += ((-UI.steer * 0.06) - camRoll) * (1 - Math.exp(-dt * 3));
-    camera.rotateZ(camRoll);
-    baseFov = portrait ? 86 : 66;
-    camera.fov = Math.min(96, baseFov + 10 * lipK + clamp((G.v - 12) * 0.45, -3, 8) * (mode === 2 ? 0.5 : 1));
+    cam.roll += ((-(G.carve || 0) * 0.07 * rollK) - cam.roll) * (1 - Math.exp(-dt * 3));
+    camera.rotateZ(cam.roll);
+    // shake: speed, the lip right overhead, and scraping the ceiling all rattle the lens
+    if (!reducedMotion && G.state === 'riding') {
+      const a = shakeK * (0.0015 + 0.006 * sstep(35, 75, v) + 0.005 * (G.inBarrel ? 1 : 0) + 0.006 * (G.scraping ? 1 : 0) + 0.003 * G.stall);
+      const t = cam.t;
+      camera.rotateX(a * (Math.sin(t * 23.1) + 0.6 * Math.sin(t * 37.7 + 1.3)));
+      camera.rotateY(a * (Math.sin(t * 19.3 + 2.1) + 0.6 * Math.sin(t * 41.9)));
+    }
+    cam.fov += (Math.min(110, fov) - cam.fov) * (1 - Math.exp(-dt * 3));
+    camera.fov = cam.fov;
     camera.updateProjectionMatrix();
+    document.body.classList.toggle('cine', !!CINE[shot] && G.mode !== 'over');
+    updateSprayScale();
   }
 
   // ------------------------------------------------------------ input
   const keys = {};
   window.addEventListener('keydown', (e) => {
-    if (e.repeat) return;
     const k = e.key.toLowerCase();
+    if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', ' '].includes(k)) e.preventDefault();
+    if (e.repeat) return;
     if (k === 'arrowleft' || k === 'a') keys.left = true;
     if (k === 'arrowright' || k === 'd') keys.right = true;
+    if (k === 'arrowup' || k === 'w') keys.up = true;
+    if (k === 'arrowdown' || k === 's') keys.down = true;
     if (k === 'c') cycleCamera();
     if (k === 'p') togglePause();
     if (k === ' ' || k === 'enter') { if (G.mode !== 'play') resetRide(); }
-    if (['arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   });
   window.addEventListener('keyup', (e) => {
     const k = e.key.toLowerCase();
     if (k === 'arrowleft' || k === 'a') keys.left = false;
     if (k === 'arrowright' || k === 'd') keys.right = false;
+    if (k === 'arrowup' || k === 'w') keys.up = false;
+    if (k === 'arrowdown' || k === 's') keys.down = false;
   });
-  // touch: hold the left/right buttons, or drag anywhere on the water
+  window.addEventListener('blur', () => { keys.left = keys.right = keys.up = keys.down = false; });
+  // touch: hold the buttons, or drag anywhere on the water (sideways carves, up pumps, down stalls)
   const touches = new Map();
-  function btnHold(el, val) {
-    const on = (e) => { e.preventDefault(); touches.set('btn' + val, val); el.classList.add('held'); try { el.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } };
-    const off = (e) => { e.preventDefault(); touches.delete('btn' + val); el.classList.remove('held'); };
+  function btnHold(el, axis, val) {
+    const id = 'btn:' + axis + val;
+    const on = (e) => { e.preventDefault(); touches.set(id, { axis, v: val }); el.classList.add('held'); try { el.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ } };
+    const off = (e) => { e.preventDefault(); touches.delete(id); el.classList.remove('held'); };
     el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off);
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
-  btnHold($('btn-l'), -1); btnHold($('btn-r'), 1);
+  btnHold($('btn-l'), 'steer', -1); btnHold($('btn-r'), 'steer', 1);
+  btnHold($('btn-stall'), 'thr', -1); btnHold($('btn-pump'), 'thr', 1);
   canvas.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const fx = e.clientX / window.innerWidth;
     const base = fx < 0.38 ? -1 : fx > 0.62 ? 1 : 0;
-    touches.set(e.pointerId, { x0: e.clientX, v: base, base });
+    touches.set(e.pointerId, { axis: 'drag', x0: e.clientX, y0: e.clientY, v: base, base, t: 0 });
     try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ }
     e.preventDefault();
   });
   canvas.addEventListener('pointermove', (e) => {
     const t = touches.get(e.pointerId);
-    if (!t || typeof t !== 'object') return;
+    if (!t || t.axis !== 'drag') return;
     const span = Math.max(60, window.innerWidth * 0.14);
     t.v = clamp(t.base + (e.clientX - t.x0) / span, -1, 1);
     // the anchor follows the finger so reversing direction responds immediately
     if (Math.abs(e.clientX - t.x0) > span) t.x0 = e.clientX - Math.sign(e.clientX - t.x0) * span;
+    const spanY = Math.max(50, window.innerHeight * 0.12);
+    const dy = (t.y0 - e.clientY) / spanY;
+    t.t = Math.abs(dy) < 0.2 ? 0 : clamp(dy, -1, 1);
+    if (Math.abs(t.y0 - e.clientY) > spanY) t.y0 = e.clientY + Math.sign(t.y0 - e.clientY) * spanY;
   });
   const endTouch = (e) => { touches.delete(e.pointerId); };
   canvas.addEventListener('pointerup', endTouch); canvas.addEventListener('pointercancel', endTouch); canvas.addEventListener('lostpointercapture', endTouch);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  function readSteer() {
-    let s = 0;
+  function readInput() {
+    let s = 0, th = 0;
     if (keys.left) s -= 1; if (keys.right) s += 1;
-    for (const t of touches.values()) { s += typeof t === 'number' ? t : t.v; }
-    return clamp(s, -1, 1);
+    if (keys.up) th += 1; if (keys.down) th -= 1;
+    for (const t of touches.values()) {
+      if (t.axis === 'steer') s += t.v;
+      else if (t.axis === 'thr') th += t.v;
+      else { s += t.v; th += t.t; }
+    }
+    UI.steer = clamp(s, -1, 1); UI.thr = clamp(th, -1, 1);
   }
 
   let paused = false;
@@ -1112,8 +1832,6 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
 
   $('start').addEventListener('click', resetRide);
   $('again').addEventListener('click', resetRide);
-  const CAM_NAMES = ['Camera: chase', 'Camera: close', 'Camera: wide', 'Camera: channel'];
-  function cycleCamera() { UI.camMode = (UI.camMode + 1) % 4; $('cam').textContent = CAM_NAMES[UI.camMode]; $('cam-hud').textContent = CAM_NAMES[UI.camMode]; }
   $('cam').addEventListener('click', cycleCamera);
   $('cam-hud').addEventListener('click', cycleCamera);
   $('qual').addEventListener('click', () => {
@@ -1134,36 +1852,78 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
 
   function hideOverlays() { $('title').classList.remove('on'); $('over').classList.remove('on'); }
   let hintT = 0;
-  function showHint() { hintT = 8; $('hint').textContent = isTouch ? 'Hold the right side to climb, the left side to drop. Stay just ahead of the breaking lip.' : 'Right arrow climbs, left arrow drops. Stay just ahead of the breaking lip.'; $('hint').classList.add('on'); }
-  $('ctrl-desc').textContent = isTouch ? 'Hold the left or right side of the screen, or drag your thumb. Right climbs the wall, left drops down the face.' : 'Left and right arrows (or A and D). Right climbs the wall, left drops down the face. C changes the camera, P pauses.';
+  function showHint() {
+    hintT = 9;
+    $('hint').textContent = isTouch
+      ? 'Left and right carve your line. ▲ pumps for speed, ▼ stalls to let the lip catch you. Stay just ahead of the breaking lip.'
+      : '← → carve your line, ↑ pumps for speed, ↓ stalls. Stay just ahead of the breaking lip.';
+    $('hint').classList.add('on');
+  }
+  $('ctrl-desc').textContent = isTouch
+    ? 'Drop and climb carve the board (hold to keep turning, let go and it settles). Pump to speed up, stall to slow down, or drag your thumb: sideways carves, up pumps, down stalls.'
+    : 'Left / right (A / D) carve: hold to keep turning, let go and the board settles. Up (W) pumps for speed while your legs last, down (S) stalls. C changes the camera, P pauses.';
 
   // ------------------------------------------------------------ HUD
+  const tagV = new THREE.Vector3();
+  let fxRot = 0;
   function updateHUD(dt) {
     UI.hudT += dt;
     if (UI.flashT > 0) { UI.flashT -= dt; if (UI.flashT <= 0) $('flash').classList.remove('on'); }
     if (hintT > 0) { hintT -= dt; if (hintT <= 0) $('hint').classList.remove('on'); }
+    // speed lines (every frame so they flicker)
+    const fx = $('speedfx');
+    const near = cam.shot === 'chase' || cam.shot === 'close' || cam.shot === 'tube';
+    const fxA = (G.mode === 'play' && G.state === 'riding' && near && !paused) ? sstep(30, 70, G.v) * 0.55 : 0;
+    fx.style.opacity = fxA.toFixed(3);
+    if (fxA > 0) { fxRot = (fxRot + 7.3) % 360; fx.style.transform = 'rotate(' + fxRot.toFixed(1) + 'deg) scale(' + (1 + 0.04 * Math.random()).toFixed(3) + ')'; }
+    // surfer tag in the wide shots
+    const tag = $('tag');
+    const camDist = camera.position.distanceTo(surfer.root.position);
+    let showTag = G.mode === 'play' && G.state !== 'over' && camDist > 45;
+    if (showTag) {
+      tagV.copy(surfer.root.position); tagV.y += 2.5; tagV.project(camera);
+      showTag = tagV.z < 1 && Math.abs(tagV.x) < 1.05 && Math.abs(tagV.y) < 1.05;
+      if (showTag) { tag.style.left = ((tagV.x * 0.5 + 0.5) * window.innerWidth).toFixed(1) + 'px'; tag.style.top = ((-tagV.y * 0.5 + 0.5) * window.innerHeight).toFixed(1) + 'px'; }
+    }
+    tag.classList.toggle('on', showTag);
     if (UI.hudT < 0.1) return;
     UI.hudT = 0;
     $('score').textContent = Math.round(G.score).toLocaleString();
     $('speed').textContent = Math.round(G.v * 3.6);
-    $('height').textContent = Math.round(G.H || W.H);
+    $('st-speed').classList.toggle('fast', G.v > 50);
+    const H = G.H || W.H;
+    $('height').textContent = Math.round(H);
     $('dist').textContent = Math.round(G.dist).toLocaleString();
+    // legs (pump stamina)
+    $('legs-fill').style.width = (G.legs * 100).toFixed(0) + '%';
+    $('legs').classList.toggle('tired', G.tired);
+    $('legs').classList.toggle('pump', G.pump > 0);
+    $('legs-lbl').textContent = G.tired ? 'legs gone: cruise' : G.stall > 0 ? 'stalling' : G.pump > 0 ? 'pumping' : 'legs';
+    // altitude on the face
+    const crest = 0.95 * H, alt = Math.max(0, G.pos.y);
+    $('fg-crest').textContent = Math.round(crest);
+    $('fg-you-m').textContent = Math.round(alt);
+    $('fg-you').style.bottom = (clamp(alt / crest, 0, 1.1) * 100).toFixed(1) + '%';
     // the line gauge: where you are relative to the pocket; left = caught, right = far out on the shoulder
-    const d = G.z - W.zBreak; // -104 closeout .. +200 shoulder
-    const x = clamp((d + 110) / 310, 0, 1);
+    const d = G.z - W.zBreak; // -104 S closeout .. +200 S shoulder
+    const x = clamp((d + 110 * S) / (310 * S), 0, 1);
     $('marker').style.left = (x * 100) + '%';
     $('gauge').classList.toggle('barrel', G.inBarrel);
     $('barrel-t').textContent = G.inBarrel ? G.barrelRun.toFixed(1) + ' s' : '';
+    if (CAM_MODES[UI.camMode] === 'auto') updateCamLabel();
   }
 
   // ------------------------------------------------------------ resize / loop
+  function updateSprayScale() {
+    const scale = (window.innerHeight * Math.min(window.devicePixelRatio || 1, Qc.dpr)) * 0.5 / Math.tan(camera.fov * 0.5 * DEG);
+    for (const s of sprays) s.setScale(scale);
+  }
   function onResize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    const scale = (h * Math.min(window.devicePixelRatio || 1, Qc.dpr)) * 0.5 / Math.tan(camera.fov * 0.5 * DEG);
-    for (const s of sprays) s.setScale(scale);
+    updateSprayScale();
   }
   window.addEventListener('resize', onResize);
   window.addEventListener('orientationchange', () => setTimeout(onResize, 300));
@@ -1172,8 +1932,10 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
   // demo autopilot behind the title: hangs around the pocket
   function autopilot() {
     const d = G.z - W.zBreak;
-    const target = d < -15 ? 0.72 : d > 10 ? 0.45 : 0.64;
-    return clamp((target - G.h) * 6, -1, 1);
+    const target = d < -15 * S ? 0.72 : d > 10 * S ? 0.45 : 0.64;
+    const thetaWant = clamp((target - G.h) * 6, -1, 1) * 0.6 * SP.THETA_MAX;
+    UI.steer = clamp((thetaWant - G.theta) * 4, -1, 1);
+    UI.thr = d < -0.5 * W.LT ? 1 : d > 40 * S ? -0.5 : 0;
   }
   let last = performance.now();
   let acc = 0;
@@ -1181,16 +1943,17 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
   function frame(now) {
     let dt = Math.min(0.1, (now - last) / 1000); last = now;
     if (paused) dt = 0;
-    UI.steer = G.mode === 'play' ? readSteer() : autopilot();
+    if (G.mode === 'play') readInput(); else autopilot();
     const slow = (G.state === 'wipeout' && G.wipeT < 1.4) ? 0.42 : 1;
     acc += dt * slow;
     let steps = 0;
     while (acc >= FIXED && steps < 12) {
-      if (G.mode !== 'over') handleEvents(SP.step(G, FIXED, UI.steer));
+      if (G.mode !== 'over') handleEvents(SP.step(G, FIXED, UI.steer, UI.thr));
       acc -= FIXED; steps++;
     }
     placeSurfer(dt * slow);
     waveSpray(dt * slow);
+    updateBirds(dt * slow);
     for (const s of sprays) s.update(dt * slow);
     updateCamera(dt);
     updateHUD(dt);
@@ -1202,12 +1965,17 @@ window.SHADERS = {"waveVert":"uniform float uTime;\nuniform float uH;\nuniform f
     waveUniforms.uFlow.value = 0.6 * Math.sqrt(9.8 * W.H);
     sky.position.copy(camera.position);
     ocean.position.x = camera.position.x; ocean.position.z = camera.position.z;
+    ocean.position.y = -1.15 * W.H / 26; // just under the deepest swell trough
+    // the city on the horizon creeps closer as the wave runs at it
+    city.position.x = Math.max(3400, 7200 - 22 * G.t);
     renderer.render(scene, camera);
   }
-  SP.reset(G); G.mode = 'title'; W.zBreak = -90;
-  window.__dbg = { G, UI, W, SP, frame, camera, renderer, scene, surfer, resetRide, cycleCamera, sprays, poseState };
+  SP.reset(G); G.mode = 'title'; W.zBreak = -90 * S;
+  setShot('heli');
+  window.__dbg = { G, UI, W, SP, cam, frame, camera, renderer, scene, surfer, resetRide, cycleCamera, setShot, sprays, poseState };
   $('best').textContent = UI.best ? 'Best ' + UI.best.toLocaleString() : '';
   $('title').classList.add('on');
+  updateCamLabel();
   renderer.setAnimationLoop(frame);
 })();
 
